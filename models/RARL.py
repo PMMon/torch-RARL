@@ -16,7 +16,7 @@ from stable_baselines3.common.vec_env import VecEnv
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 
-from utils.wrappers import AdversarialWrapper
+from utils.wrappers import AdversarialWrapper, AdversaryRewardWrapper
 
 
 class RARL(BaseAlgorithm):
@@ -72,8 +72,9 @@ class RARL(BaseAlgorithm):
              env.set_action_space(env.adv_action_space)
         #adversary_policy = ActorCriticPolicy(observation_space=env.observation_space, action_space=env.adv_action_space, lr_schedule=linear_schedule(0.001))
         adversary_policy_kwargs = dict(net_arch=adversary_layers)
-        self.adversary = TRPO(policy=adversary_policy, env=env, n_steps=n_steps_adversary, policy_kwargs=adversary_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, **adversary_kwargs)
-    
+        self.adversary = TRPO(policy=adversary_policy, env=AdversaryRewardWrapper(env), n_steps=n_steps_adversary, policy_kwargs=adversary_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, **adversary_kwargs)
+
+        self.env = env
 
     def _setup_model(self) -> None:
         """Create networks, buffer and optimizers."""
@@ -228,6 +229,7 @@ class RARL(BaseAlgorithm):
             if iteration_i > 0:
                 reset_num_timesteps = False
             # perform protagonist rollout and training
+            
             print("train protagonist...")
             self.protagonist = self.protagonist.learn(total_timesteps_protagonist, 
                                                     callback=callback_protagonist, 
@@ -239,8 +241,8 @@ class RARL(BaseAlgorithm):
                                                     eval_log_path=eval_log_path,
                                                     reset_num_timesteps=reset_num_timesteps,
                                                     )
-            
-            if iteration_i == 0 or iteration_i > adv_delay:
+            """
+            if iteration_i > adv_delay:
                 # perform adversary rollout and training
                 print("train adversary")
                 self.adversary = self.adversary.learn(total_timesteps_adversary, 
@@ -253,8 +255,9 @@ class RARL(BaseAlgorithm):
                                                         eval_log_path=eval_log_path,
                                                         reset_num_timesteps=reset_num_timesteps
                                                         )
-            
+            """
             self.num_timesteps = self.protagonist.num_timesteps
+            #self.num_timesteps = self.adversary.num_timesteps
             iteration_i += 1
             self._update_current_progress_remaining(self.num_timesteps, total_timesteps)
 
@@ -313,19 +316,21 @@ if __name__ == "__main__":
     parser.add_argument('--adversary_layers', nargs='+', type=int, default=[100, 100, 100], help='Layer specification for critic')
 
     parser.add_argument('--n_iter', type=int, default=50, help='Number of iterations of alternating optimization')
-    parser.add_argument('--n_steps_protagonist', type=int, default=2048, help='Number of steps to run for each environment per protagonist update')
-    parser.add_argument('--n_steps_adversary', type=int, default=2048, help='Number of steps to run for each environment per adversary update')
+    parser.add_argument('--n_steps_protagonist', type=int, default=5000, help='Number of steps to run for each environment per protagonist update')
+    parser.add_argument('--n_steps_adversary', type=int, default=5000, help='Number of steps to run for each environment per adversary update')
 
     parser.add_argument('--adv_delay', type=int, default=-1, help='Delay of adversary')
+    parser.add_argument('--adv_fraction', type=float, default=1.0, help='Force-scaling for adversary')
+
 
 
     args = parser.parse_args()
 
     # Define model
     env = gym.make(args.env)
-    env = AdversarialWrapper(env=env, adv_fraction=2.0)
+    env = AdversarialWrapper(env=env, adv_fraction=args.adv_fraction)
 
 
     # Test model
     rarl_model = RARL(protag_policy=args.protag_policy, adversary_policy=args.adversary_policy, env=env, protag_layers=args.protag_layers, adversary_layers=args.adversary_layers, tensorboard_log="tb_log", verbose=args.verbose)
-    rarl_model.learn(args.n_iter, args.n_steps_protagonist, args.n_steps_adversary, adv_delay=args.adv_delay, eval_log_path="tb_log")
+    rarl_model.learn(args.n_iter, total_timesteps_protagonist=args.n_steps_protagonist, total_timesteps_adversary=args.n_steps_adversary, adv_delay=args.adv_delay, eval_log_path="tb_log")
