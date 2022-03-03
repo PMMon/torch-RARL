@@ -69,9 +69,6 @@ class AdversarialWrapper(gym.Wrapper):
         self._adv_action_space = self.convert_gym_space(env.action_space, low_val=-high_adv, high_val=high_adv)
         self._action_space = self.convert_gym_space(env.action_space, low_val=env.action_space.low, high_val=env.action_space.high)
         self._observation_space = self.convert_gym_space(env.observation_space, low_val=env.observation_space.low, high_val=env.observation_space.high)
-
-        # set adversary flag
-        self.adversary = False
         
     
     @property
@@ -95,14 +92,14 @@ class AdversarialWrapper(gym.Wrapper):
 
     def step(self, action):
         next_obs, reward, done, info = self.env.step(action)
-        if self.adversary:
-            return next_obs, -reward, done, info
-        else: 
-            return next_obs, -reward, done, info
-
+        return next_obs, reward, done, info
 
     def render(self):
         self.env.render()
+
+
+    def set_action_space(self, updated_action_space): 
+        self._action_space = updated_action_space
 
 
     def set_action_space(self, updated_action_space): 
@@ -127,5 +124,13 @@ class AdversarialWrapper(gym.Wrapper):
         else:
             raise NotImplementedError
 
+
+class AdversaryRewardWrapper(gym.RewardWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+    
+    def reward(self, rew):
+        # modify rew
+        return -rew
 
         
