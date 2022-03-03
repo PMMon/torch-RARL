@@ -316,6 +316,9 @@ if __name__ == "__main__":
     parser.add_argument('--n_steps_protagonist', type=int, default=2048, help='Number of steps to run for each environment per protagonist update')
     parser.add_argument('--n_steps_adversary', type=int, default=2048, help='Number of steps to run for each environment per adversary update')
 
+    parser.add_argument('--adv_delay', type=int, default=-1, help='Delay of adversary')
+
+
     args = parser.parse_args()
 
     # Define model
@@ -324,5 +327,5 @@ if __name__ == "__main__":
 
 
     # Test model
-    rarl_model = RARL(protag_policy="MlpPolicy", adversary_policy="MlpPolicy", env=env, protag_layers=args.protag_layers, adversary_layers=args.adversary_layers, tensorboard_log="tb_log", verbose=args.verbose)
-    rarl_model.learn(10, 2049, 2049, adv_delay=args.adv_delay, eval_log_path="tb_log")
+    rarl_model = RARL(protag_policy=args.protag_policy, adversary_policy=args.adversary_policy, env=env, protag_layers=args.protag_layers, adversary_layers=args.adversary_layers, tensorboard_log="tb_log", verbose=args.verbose)
+    rarl_model.learn(args.n_iter, args.n_steps_protagonist, args.n_steps_adversary, adv_delay=args.adv_delay, eval_log_path="tb_log")
