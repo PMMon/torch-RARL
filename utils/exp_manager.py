@@ -10,6 +10,8 @@ import numpy as np
 from collections import OrderedDict
 from pprint import pprint
 from typing import Any, Callable, Dict, List, Optional, Tuple
+import torch
+import copy
 
 from optuna.samplers import BaseSampler, RandomSampler, TPESampler
 from optuna.integration.skopt import SkoptSampler
@@ -28,7 +30,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.
 
 from utils.hyperparams_opt import HYPERPARAMS_SAMPLER
 from utils.utils import get_latest_run_id, linear_schedule, get_wrapper_class, get_callback_list
-from utils.callbacks import SaveVecNormalizeCallback, TrialEvalCallback
+from utils.callbacks import SaveVecNormalizeCallback, TrialEvalCallback, SetupProTrainingCallback, SetupAdvTrainingCallback
+from utils.wrappers import AdversarialClassicControlWrapper
 from models.algorithms import ALGOS
 
 
@@ -87,6 +90,11 @@ class ExperimentManager(object):
         n_envs: int = 1,
         n_eval_envs: int = 1,
         no_optim_plots: bool = False,
+        adv_env: bool = False,
+        adv_fraction: float = 1.0,
+        adv_delay: int = -1,
+        total_steps_protagonist: int = 10, 
+        total_steps_adversary: int = 10,
     ) -> None:
         super(ExperimentManager, self).__init__()
         self.args = args
@@ -104,12 +112,16 @@ class ExperimentManager(object):
         self.normalize_kwargs = {}
         self.env_wrapper = None
         self.frame_stack = None
+        self.adv_env = adv_env
 
         self.vec_env_class = {"dummy": DummyVecEnv, "subproc": SubprocVecEnv}[vec_env_type]
         self.vec_env_kwargs = {}
 
         self._is_atari = self.is_atari(env_id)
         # self.vec_env_kwargs = {} if vec_env_type == "dummy" else {"start_method": "fork"}
+
+        # adversarial env
+        self.adv_fraction = adv_fraction
 
         # training
         self.n_timesteps = n_timesteps
@@ -162,6 +174,11 @@ class ExperimentManager(object):
             self.continue_training = True
         self.params_path = os.path.join(self.save_path, "params")
 
+        # RARL
+        self.adv_delay = adv_delay
+        self.total_steps_protagonist = total_steps_protagonist
+        self.total_steps_adversary = total_steps_adversary
+
 
     def setup_experiment(self) -> Optional[BaseAlgorithm]:
         """Prepares experiment by creating environment, loading and preprocessing hyperparameters, etc.
@@ -193,6 +210,8 @@ class ExperimentManager(object):
         # preprocess action noise
         self._hyperparams = self._preprocess_action_noise(hyperparams, env)
         
+        print("hyperparams: " + str(self._hyperparams))
+
         # define model and account for pre-trained model
         if self.continue_training:
             model = self._load_pretrained_agent(self._hyperparams, env)
@@ -282,7 +301,7 @@ class ExperimentManager(object):
         hyperparams = self._preprocess_normalization(hyperparams)
 
         # pre-process policy/buffer keyword arguments
-        for kwargs_key in {"policy_kwargs", "replay_buffer_class", "replay_buffer_kwargs"}:
+        for kwargs_key in {"policy_kwargs", "replay_buffer_class", "replay_buffer_kwargs", "protagonist_kwargs", "protagonist_policy_kwargs", "adversary_kwargs", "adversary_policy_kwargs"}:
             if kwargs_key in hyperparams.keys() and isinstance(hyperparams[kwargs_key], str):
                 hyperparams[kwargs_key] = eval(hyperparams[kwargs_key])
 
@@ -402,7 +421,7 @@ class ExperimentManager(object):
             self.callbacks.append(eval_callback)
 
 
-    def create_envs(self, n_envs: int, eval_env: bool = False, no_log: bool = False, adversarial: bool = False) -> VecEnv:
+    def create_envs(self, n_envs: int, eval_env: bool = False, no_log: bool = False) -> VecEnv:
         """
         Create the environment and wrap it if necessary.
         :param n_envs: number of environments in stack
@@ -418,6 +437,15 @@ class ExperimentManager(object):
         if "Neck" in self.env_id or self.is_robotics_env(self.env_id) or "parking-v0" in self.env_id:
             monitor_kwargs = dict(info_keywords=("is_success",))
 
+        # if adversarial environment, adapt action space by wrapping into adversarial wrapper
+        if self.algo == "rarl" or self.adv_env:
+            wrapper_kwargs = {}
+            if not self.env_wrapper:
+                if self.verbose > 0:
+                    print("Using adversarial environment wrapper...")
+                self.env_wrapper = AdversarialClassicControlWrapper
+                wrapper_kwargs.update(dict(adv_fraction=self.adv_fraction))
+
         # on most env, SubprocVecEnv does not help and is quite memory hungry, therefore we use DummyVecEnv by default
         env = make_vec_env(
             env_id=self.env_id,
@@ -429,11 +457,8 @@ class ExperimentManager(object):
             vec_env_cls=self.vec_env_class,
             vec_env_kwargs=self.vec_env_kwargs,
             monitor_kwargs=monitor_kwargs,
+            wrapper_kwargs=wrapper_kwargs
         )
-
-        # if adversarial environment, adapt action space by wrapping into adversarial wrapper
-        if adversarial: 
-            env = 
 
         # wrap the env into a VecNormalize wrapper if needed and load saved statistics when present
         env = self._maybe_normalize(env, eval_env)
@@ -567,11 +592,24 @@ class ExperimentManager(object):
         if self.log_interval > -1:
             kwargs = {"log_interval": self.log_interval}
 
+        if False: 
+            self.callbacks.append(
+                SetupProTrainingCallback(policy=model.policy, #copy.deepcopy(model.policy),
+                                         verbose=self.verbose)
+            )
+
         if len(self.callbacks) > 0:
             kwargs["callback"] = self.callbacks
 
+            if self.algo == "rarl": 
+                kwargs["callback_protagonist"] = self.callbacks
+                kwargs["callback_adversary"] = self.callbacks
+
         try:
-            model.learn(self.n_timesteps, **kwargs)
+            if self.algo == "rarl": 
+                model.learn(self.n_timesteps, total_timesteps_protagonist=self.total_steps_protagonist, total_timesteps_adversary=self.total_steps_adversary, adv_delay=self.adv_delay, **kwargs)
+            else:
+                model.learn(self.n_timesteps, **kwargs)
         except KeyboardInterrupt:
             # this allows to save the model when interrupting training
             pass
@@ -587,10 +625,21 @@ class ExperimentManager(object):
         # continue training
         print("Loading pretrained agent...")
         # policy should not be changed
-        del hyperparams["policy"]
+        if self.algo == "rarl":
+            del hyperparams["protagonist_policy"]
+            del hyperparams["adversary_policy"]
 
-        if "policy_kwargs" in hyperparams.keys():
-            del hyperparams["policy_kwargs"]
+            if "protagonist_policy_kwargs" in hyperparams.keys():
+                del hyperparams["protagonist_policy_kwargs"]
+                
+            if "adversary_policy_kwargs" in hyperparams.keys():
+                del hyperparams["adversary_policy_kwargs"]
+        else:
+            del hyperparams["policy"]
+
+            if "policy_kwargs" in hyperparams.keys():
+                del hyperparams["policy_kwargs"]
+
 
         model = ALGOS[self.algo].load(
             os.path.join(self.save_path, self.env_id),
