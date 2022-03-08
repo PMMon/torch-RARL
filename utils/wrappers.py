@@ -152,9 +152,9 @@ class AdversarialClassicControlWrapper(gym.Wrapper):
         high_adv = np.ones(env.action_space.shape[0], dtype=np.float32) * adv_magnitude
 
         self._adv_action_space = self.convert_gym_space(env.action_space, low_val=-high_adv, high_val=high_adv)
-        self._action_space = env.action_space #self.convert_gym_space(env.action_space, low_val=env.action_space.low, high_val=env.action_space.high)
-        self._initial_action_space = env.action_space #self.convert_gym_space(env.action_space, low_val=env.action_space.low, high_val=env.action_space.high)
-        self._observation_space = env.observation_space #self.convert_gym_space(env.observation_space, low_val=env.observation_space.low, high_val=env.observation_space.high)
+        self._action_space = env.action_space
+        self._initial_action_space = env.action_space
+        self._observation_space = env.observation_space
     
         self.operating_mode = None
         self._pro_policy = None
@@ -186,14 +186,18 @@ class AdversarialClassicControlWrapper(gym.Wrapper):
         self._action_space = updated_action_space
 
 
-    def set_pro_policy(self, pro_policy):
-        self._pro_policy = pro_policy
-        self._pro_policy.set_training_mode(False)
-    
-
-    def set_adv_policy(self, adv_policy):
+    def sample_adv_policy(self, adv_policy):
+        print("additional sample from adversary policy...")
+        self.operating_mode = "protagonist"
         self._adv_policy = adv_policy
         self._adv_policy.set_training_mode(False)
+    
+
+    def sample_pro_policy(self, pro_policy):
+        print("additional sample from protagonist policy...")
+        self.operating_mode = "adversary"
+        self._pro_policy = pro_policy
+        self._pro_policy.set_training_mode(False)
 
 
     def sample_action(self):
@@ -208,11 +212,17 @@ class AdversarialClassicControlWrapper(gym.Wrapper):
     def step(self, action):
         if hasattr(action, '__dict__'):
             print("action has dict")
-            obs, rew, done, info = self.env.step(action + action_sampled)
-            self._old_observation = obs
+            obs, rew, done, info = self.env.step(action.pro_action + action.adv_action)
+            self._last_observation = obs
             return obs, rew, done, info
         else:
-            if self.operating_mode.lower() == "protagonist":
+            if not self.operating_mode:
+                print("simple action without sampling...")
+                obs, rew, done, info = self.env.step(action)
+                self._last_observation = obs
+                return obs, rew, done, info
+
+            elif self.operating_mode.lower() == "protagonist":
                 with torch.no_grad():
                     # Convert to pytorch tensor or to TensorDict
                     obs_tensor = obs_as_tensor(self._last_observation, self.device)
@@ -239,10 +249,14 @@ class AdversarialClassicControlWrapper(gym.Wrapper):
                 # Clip the actions to avoid out of bound error
                 if isinstance(self._action_space, gym.spaces.Box):
                     clipped_actions = np.clip(clipped_actions, self._action_space.low, self._action_space.high).squeeze(0)
-            else: 
+            else:
                 raise ValueError(f"Please choose operating mode either 'protagonist' or 'adversary', not: ", self.operating_mode)
 
-            obs, rew, done, info = self.env.step(action) # + clipped_actions)
+            #print("action: " + str(action))
+            #print("clipped action: " + str(clipped_actions))
+            #print("final action: " + str(action + clipped_actions))
+
+            obs, rew, done, info = self.env.step(action + clipped_actions)
             self._last_observation = obs
             return obs, rew, done, info
     
