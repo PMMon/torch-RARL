@@ -34,6 +34,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_envs", type=int, default=1, help="Number of environments for stack")
     parser.add_argument("--vec_env_type", type=str, default="dummy", choices=["dummy", "subproc"], help="VecEnv type")
     parser.add_argument("--env_kwargs", type=str, nargs="+", action=StoreDict, help="Optional keyword argument to pass to the env constructor")
+    parser.add_argument("--adv_env", action="store_true", default=False, help="Adversarial gym environment")
 
     # Configs about model
     parser.add_argument("--algo", type=str, default="ppo", choices=list(ALGOS.keys()), help="RL Algorithm")
@@ -72,8 +73,16 @@ if __name__ == "__main__":
     parser.add_argument("-f", "--log_folder", type=str, default=os.path.join("logging"), help="Log folder")
 
     # Configs for RARL
-    parser.add_argument('--actor_layers', nargs='+', type=int, default=[100, 100, 100], help='Layer specification for actor')
-    parser.add_argument('--critic_layers', nargs='+', type=int, default=[100, 100, 100], help='Layer specification for critic')
+    parser.add_argument('--protagonist_policy', type=str, default="MlpPolicy", help='Policy of protagonist')
+    parser.add_argument('--adversary_policy', type=str, default="MlpPolicy", help='Policy of adversary')
+    parser.add_argument('--protag_layers', nargs='+', type=int, default=[100, 100, 100], help='Layer specification for actor')
+    parser.add_argument('--adversary_layers', nargs='+', type=int, default=[100, 100, 100], help='Layer specification for critic')
+
+    parser.add_argument('--total_steps_protagonist', type=int, default=10, help='Number of steps to run for each environment per protagonist update')
+    parser.add_argument('--total_steps_adversary', type=int, default=10, help='Number of steps to run for each environment per adversary update')
+
+    parser.add_argument('--adv_delay', type=int, default=-1, help='Delay of adversary')
+    parser.add_argument('--adv_fraction', type=float, default=1.0, help='Force-scaling for adversary')
 
 
 
@@ -88,7 +97,6 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=4000, help='Number of training samples for each iteration')
     parser.add_argument('--save_every', type=int, default=100, help='Save checkpoint every save_every iterations')
     parser.add_argument('--n_process', type=int, default=1, help='Number of parallel threads for sampling environment')
-    parser.add_argument('--adv_fraction', type=float, default=0.25, help='fraction of maximum adversarial force to be applied')
     parser.add_argument('--step_size', type=float, default=0.01, help='kl step size for TRPO')
     parser.add_argument('--gae_lambda', type=float, default=0.97, help='gae_lambda for learner')
     parser.add_argument('--folder', type=str, default=os.environ['HOME'], help='folder to save result in')
@@ -163,7 +171,12 @@ if __name__ == "__main__":
         vec_env_type=args.vec_env_type,
         n_envs=args.n_envs,
         n_eval_envs=args.n_eval_envs,
-        no_optim_plots=args.no_optim_plots
+        no_optim_plots=args.no_optim_plots,
+        adv_env=args.adv_env, 
+        adv_fraction=args.adv_fraction,
+        adv_delay=args.adv_delay,
+        total_steps_protagonist=args.total_steps_protagonist,
+        total_steps_adversary=args.total_steps_adversary
     )
 
     # Prepare experiment and launch hyperparameter optimization if needed
