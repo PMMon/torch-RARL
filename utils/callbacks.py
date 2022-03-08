@@ -169,7 +169,6 @@ class CustomRewardCallback(BaseCallback):
 
         :return: (bool) If the callback returns False, training is aborted early.
         """
-        self.training_env.r
         return True
 
     def _on_rollout_end(self) -> None:
@@ -183,3 +182,65 @@ class CustomRewardCallback(BaseCallback):
         This event is triggered before exiting the `learn()` method.
         """
         pass
+
+
+class SetupProTrainingCallback(BaseCallback):
+    """
+    Sets up training mode for protagonist
+
+    :param verbose: (int) Verbosity level 0: not output 1: info 2: debug
+    """
+    def __init__(self, policy, verbose=0):
+        super(SetupProTrainingCallback, self).__init__(verbose)
+        self.policy = policy
+
+
+    def _on_training_start(self) -> None:
+        """
+        This method is called before the first rollout starts.
+        """
+        self.training_env.set_attr("operating_mode", "protagonist")
+        self.training_env.set_attr("_adv_policy", self.policy)
+
+
+    def _on_step(self) -> bool:
+        """
+        This method will be called by the model after each call to `env.step()`.
+
+        For child callback (of an `EventCallback`), this will be called
+        when the event is triggered.
+
+        :return: (bool) If the callback returns False, training is aborted early.
+        """
+        return True
+
+
+class SetupAdvTrainingCallback(BaseCallback):
+    """
+    Sets up training mode for protagonist
+
+    :param verbose: (int) Verbosity level 0: not output 1: info 2: debug
+    """
+    def __init__(self, policy, verbose=0):
+        super(SetupAdvTrainingCallback, self).__init__(verbose)
+        self.policy = policy
+
+
+    def _on_training_start(self) -> None:
+        """
+        This method is called before the first rollout starts.
+        """
+        self.training_env.set_attr("operating_mode", "adversary")
+        self.training_env.set_attr("_pro_policy", self.policy)
+
+
+    def _on_step(self) -> bool:
+        """
+        This method will be called by the model after each call to `env.step()`.
+
+        For child callback (of an `EventCallback`), this will be called
+        when the event is triggered.
+
+        :return: (bool) If the callback returns False, training is aborted early.
+        """
+        return True
