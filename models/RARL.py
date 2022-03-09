@@ -14,7 +14,7 @@ from stable_baselines3.common.on_policy_algorithm import BaseAlgorithm
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback
-from stable_baselines3.common.vec_env import VecEnv, VecNormalize
+from stable_baselines3.common.vec_env import VecEnv
 from stable_baselines3.common.save_util import load_from_zip_file, recursive_setattr, recursive_getattr, save_to_zip_file
 from stable_baselines3.common.utils import (
     get_system_info,
@@ -22,11 +22,18 @@ from stable_baselines3.common.utils import (
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 
-from utils.wrappers import AdversarialWrapper, AdversaryRewardWrapper, AdversaryRewardVecEnvWrapper, AdversarialClassicControlWrapper
+from utils.wrappers import AdversaryRewardWrapper, AdversaryRewardVecEnvWrapper, AdversarialClassicControlWrapper
 from utils.callbacks import SetupProTrainingCallback, SetupAdvTrainingCallback
 
 
 class RARL(BaseAlgorithm):
+    """
+    Implements the Robust Adversarial Reinforcement Learning (RARL) agent introduced by
+    Pinto et al. (2017) <https://arxiv.org/abs/1703.02702>. 
+
+    An agent that operates in the presence of a destabilizing adversary which 
+    applies disturbance forces to the system.
+    """
     def __init__(
         self, 
         protagonist_policy: Union[str, Type[ActorCriticPolicy]],
@@ -48,7 +55,6 @@ class RARL(BaseAlgorithm):
         support_multi_env: bool = True,
         tensorboard_log: Optional[str] = None,
         device: Union[torch.device, str] = "auto",
-        **kwargs
         ):
         super(RARL, self).__init__(policy=None, 
                                     env=env,
@@ -98,11 +104,6 @@ class RARL(BaseAlgorithm):
                                      target_kl= 0.005,
                                      gae_lambda= 0.92
                                     )
-        #if isinstance(env, VecEnv):
-        #    [env.envs[i].set_action_space(env.envs[i].adv_action_space) for i in range(len(env.envs))]
-        #else: 
-        #     env.set_action_space(env.adv_action_space)
-        #adversary_policy = ActorCriticPolicy(observation_space=env.observation_space, action_space=env.adv_action_space, lr_schedule=linear_schedule(0.001))
 
         self.adversary_policy = adversary_policy
         self.adversary_kwargs = adversary_kwargs
@@ -112,17 +113,13 @@ class RARL(BaseAlgorithm):
         if "n_steps_adversary" in self.adversary_kwargs: 
             n_steps_adversary = self.adversary_kwargs["n_steps_adversary"]
 
+        # wrap environment for modified reward function
         if isinstance(env, VecEnv):
             adv_env = AdversaryRewardVecEnvWrapper(env)
         else: 
             adv_env = AdversaryRewardWrapper(env)
 
         self.adversary = TRPO(policy=adversary_policy, env=adv_env, n_steps=n_steps_adversary, policy_kwargs=self.adversary_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, create_eval_env=create_eval_env, **self.adversary_kwargs)
-
-        #if isinstance(env, VecEnv):
-        #    [env.envs[i].set_action_space(env.envs[i].initial_action_space) for i in range(len(env.envs))]
-        #else: 
-        #     env.set_action_space(env.initial_action_space)
         
 
     def _setup_model(self) -> None:
@@ -249,6 +246,26 @@ class RARL(BaseAlgorithm):
             reset_num_timesteps: bool = True,
             **kwargs
         ):
+        """Setup learning configs and train model for total_timesteps
+
+        Args:
+            total_timesteps (int): N_iter, number of iterations for alternating RARL algorithm
+            total_timesteps_protagonist (int): N_mu, number of iterations protagonist performs policy optimization
+            total_timesteps_adversary (int): N_nu, number of iterations adversary performs policy optimization
+            adv_delay (int, optional): Number of iterations n until adversary is optimized. Defaults to -1.
+            callback (MaybeCallback, optional): RARL callbacks. Defaults to None.
+            callback_protagonist (MaybeCallback, optional): Protagonist callbacks. Defaults to None.
+            callback_adversary (MaybeCallback, optional): Adversary callbacks. Defaults to None.
+            log_interval (int, optional): Interval of logging. Defaults to 1.
+            eval_env (Optional[GymEnv], optional): Evaluation environment. Defaults to None.
+            eval_freq (int, optional): Evaluation frequency. Defaults to -1.
+            n_eval_episodes (int, optional): Number of evaluation episodes. Defaults to 5.
+            tb_log_name (str, optional): RARL log name. Defaults to "RARL".
+            tb_log_name_protagonist (str, optional): Protagonist log name. Defaults to "PRO".
+            tb_log_name_adversary (str, optional): Adversary log name. Defaults to "ADV".
+            eval_log_path (Optional[str], optional): Path to evaluation logging. Defaults to None.
+            reset_num_timesteps (bool, optional): Whether or not to reset number of current timesteps. Defaults to True.
+        """
 
         iteration_i = 0
 
@@ -328,7 +345,6 @@ class RARL(BaseAlgorithm):
                 self.logger.record("time/total_timesteps", self.num_timesteps, exclude="tensorboard")
                 self.logger.dump(step=self.num_timesteps)
 
-
         # callback on end 
         callback.on_training_end()
 
@@ -356,7 +372,6 @@ class RARL(BaseAlgorithm):
             (used in recurrent policies)
         """
         return self.protagonist.policy.predict(observation, state, episode_start, deterministic)
-
 
 
     def _excluded_save_params(self) -> List[str]:
@@ -603,11 +618,11 @@ if __name__ == "__main__":
 
     # Define model
     env = gym.make(args.env)
-    #env = AdversarialWrapper(env=env, adv_fraction=args.adv_fraction)
     env = AdversarialClassicControlWrapper(env=env, adv_fraction=args.adv_fraction)
 
     # Test model
     rarl_model = RARL(protagonist_policy=args.protagonist_policy, adversary_policy=args.adversary_policy, env=env, protag_layers=args.protag_layers, adversary_layers=args.adversary_layers, tensorboard_log="tb_log", verbose=args.verbose, seed=args.seed)
     rarl_model.learn(args.n_iter, total_timesteps_protagonist=args.n_steps_protagonist, total_timesteps_adversary=args.n_steps_adversary, adv_delay=args.adv_delay, eval_freq=args.eval_freq, eval_log_path="tb_log")
     
+    # Save model
     rarl_model.save("RARL")
