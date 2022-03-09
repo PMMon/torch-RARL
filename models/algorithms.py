@@ -6,6 +6,11 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.
 
 from models import RARL
 
+# ===================================
+# Algorithms available for training
+# and evaluation
+# =================================== 
+
 ALGOS = {
     "a2c": A2C,
     "ddpg": DDPG,
@@ -17,6 +22,6 @@ ALGOS = {
     "qrdqn": QRDQN,
     "tqc": TQC,
     "trpo": TRPO,
-    # Own Contrib
+    # Project's Contrib,
     "rarl": RARL
 }
