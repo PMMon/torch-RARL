@@ -22,7 +22,7 @@ from stable_baselines3.common.utils import (
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 
-from utils.wrappers import AdversarialWrapper, AdversaryRewardWrapper, AdversarialClassicControlWrapper
+from utils.wrappers import AdversarialWrapper, AdversaryRewardWrapper, AdversaryRewardVecEnvWrapper, AdversarialClassicControlWrapper
 from utils.callbacks import SetupProTrainingCallback, SetupAdvTrainingCallback
 
 
@@ -48,6 +48,7 @@ class RARL(BaseAlgorithm):
         support_multi_env: bool = True,
         tensorboard_log: Optional[str] = None,
         device: Union[torch.device, str] = "auto",
+        **kwargs
         ):
         super(RARL, self).__init__(policy=None, 
                                     env=env,
@@ -84,7 +85,7 @@ class RARL(BaseAlgorithm):
         if "n_steps_protagonist" in self.protagonist_kwargs: 
             n_steps_protagonist = self.protagonist_kwargs["n_steps_protagonist"]
 
-        self.protagonist = TRPO(policy=protagonist_policy, env=env, n_steps=n_steps_protagonist, policy_kwargs=self.protagonist_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, **self.protagonist_kwargs)
+        self.protagonist = TRPO(policy=protagonist_policy, env=env, n_steps=n_steps_protagonist, policy_kwargs=self.protagonist_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, create_eval_env=create_eval_env, **self.protagonist_kwargs)
 
         # define adversary
         if adversary_kwargs is None: 
@@ -111,7 +112,12 @@ class RARL(BaseAlgorithm):
         if "n_steps_adversary" in self.adversary_kwargs: 
             n_steps_adversary = self.adversary_kwargs["n_steps_adversary"]
 
-        self.adversary = TRPO(policy=adversary_policy, env=AdversaryRewardWrapper(env), n_steps=n_steps_adversary, policy_kwargs=self.adversary_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, **self.adversary_kwargs)
+        if isinstance(env, VecEnv):
+            adv_env = AdversaryRewardVecEnvWrapper(env)
+        else: 
+            adv_env = AdversaryRewardWrapper(env)
+
+        self.adversary = TRPO(policy=adversary_policy, env=adv_env, n_steps=n_steps_adversary, policy_kwargs=self.adversary_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, create_eval_env=create_eval_env, **self.adversary_kwargs)
 
         #if isinstance(env, VecEnv):
         #    [env.envs[i].set_action_space(env.envs[i].initial_action_space) for i in range(len(env.envs))]
@@ -283,34 +289,28 @@ class RARL(BaseAlgorithm):
                                                     reset_num_timesteps=reset_num_timesteps,
                                                     **kwargs
                                                     )
-            """
+            
             if iteration_i >= adv_delay:
                 # perform adversary rollout and training
                 if self.verbose > 0:
                     print("train adversary...")
 
-                self.env.sample_pro_policy(self.protagonist.policy)
-
-                if isinstance(self.env, VecEnv):
-                    [self.env.envs[i].set_pro_policy(self.protagonist.policy) for i in range(len(self.env.envs))]
-                else: 
-                    self.env.set_pro_policy(self.protagonist.policy)
-
                 if adv_delay >= 0 and self.adversary.num_timesteps == 0: 
                     self.adversary.num_timesteps = self.protagonist.num_timesteps
 
-                adv_callback.policy = self.protagonist.policy
+                callback_adversary[-1].policy = self.protagonist.policy
                 self.adversary = self.adversary.learn(total_timesteps_adversary, 
-                                                        callback=adv_callback, 
+                                                        callback=callback_adversary, 
                                                         log_interval=log_interval, 
                                                         eval_env=eval_env,
                                                         eval_freq=eval_freq,
                                                         n_eval_episodes=n_eval_episodes,
                                                         tb_log_name=tb_log_name_adversary,
                                                         eval_log_path=eval_log_path,
-                                                        reset_num_timesteps=reset_num_timesteps
+                                                        reset_num_timesteps=reset_num_timesteps,
+                                                        **kwargs
                                                         )
-            """
+            
             if iteration_i % 100 == 0: 
                 print(f"Iteration:", iteration_i, "/", total_timesteps)
 
