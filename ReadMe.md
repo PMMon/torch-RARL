@@ -42,26 +42,22 @@ Besides [RARL](https://arxiv.org/abs/1703.02702), a variety of other RL agents c
 
 | **Name**         | **Recurrent**      | `Box`          | `Discrete`     | `MultiDiscrete` | `MultiBinary`  | **Multi Processing**              |
 | ------------------- | ------------------ | ------------------ | ------------------ | ------------------- | ------------------ | --------------------------------- |
-| A2C   | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
-| DDPG  | :x: | :heavy_check_mark: | :x:                | :x:                 | :x:                | :heavy_check_mark: |
-| DQN   | :x: | :x: | :heavy_check_mark: | :x:                 | :x:                | :heavy_check_mark: |
-| PPO   | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:  | :heavy_check_mark: | :heavy_check_mark: |
-| QR-DQN<sup>[1](#f1)</sup>  | :x: | :x: | :heavy_check_mark: | :x:                 | :x:                | :heavy_check_mark: |
-| SAC   | :x: | :heavy_check_mark: | :x:                | :x:                 | :x:                | :heavy_check_mark: |
-| TD3   | :x: | :heavy_check_mark: | :x:                | :x:                 | :x:                | :heavy_check_mark: |
-| TQC<sup>[1](#f1)</sup>   | :x: | :heavy_check_mark: | :x:                | :x:                 | :x: | :heavy_check_mark: |
-| TRPO<sup>[1](#f1)</sup>  | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:  | :heavy_check_mark: | :heavy_check_mark: |
-| RARL<sup>[2](#f2)</sup>  | :x: | :heavy_check_mark: | :x: | :x:  | :x: | :x: |
+| A2C<sup>[1](#f1)</sup>   | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| DDPG<sup>[1](#f1)</sup>  | :x: | :heavy_check_mark: | :x:                | :x:                 | :x:                | :heavy_check_mark: |
+| DQN<sup>[1](#f1)</sup>   | :x: | :x: | :heavy_check_mark: | :x:                 | :x:                | :heavy_check_mark: |
+| PPO<sup>[1](#f1)</sup>   | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:  | :heavy_check_mark: | :heavy_check_mark: |
+| QR-DQN<sup>[2](#f2)</sup>  | :x: | :x: | :heavy_check_mark: | :x:                 | :x:                | :heavy_check_mark: |
+| SAC<sup>[1](#f1)</sup>   | :x: | :heavy_check_mark: | :x:                | :x:                 | :x:                | :heavy_check_mark: |
+| TD3<sup>[1](#f1)</sup>   | :x: | :heavy_check_mark: | :x:                | :x:                 | :x:                | :heavy_check_mark: |
+| TQC<sup>[2](#f2)</sup>   | :x: | :heavy_check_mark: | :x:                | :x:                 | :x: | :heavy_check_mark: |
+| TRPO<sup>[2](#f2)</sup>  | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark:  | :heavy_check_mark: | :heavy_check_mark: |
+| RARL<sup>[3](#f3)</sup>  | :x: | :heavy_check_mark: | :x: | :x:  | :x: | :x: |
 
-<b id="f1">1</b>: Implemented in [SB3 Contrib](https://github.com/Stable-Baselines-Team/stable-baselines3-contrib) GitHub repository.
+<b id="f1">1</b>: Implemented in [SB3](https://github.com/DLR-RM/stable-baselines3) GitHub repository. 
 
-<b id="f2">2</b>: Implemented in this GitHub repository.
+<b id="f2">2</b>: Implemented in [SB3 Contrib](https://github.com/Stable-Baselines-Team/stable-baselines3-contrib) GitHub repository.
 
-Actions `gym.spaces`:
- * `Box`: A N-dimensional box that containes every point in the action space.
- * `Discrete`: A list of possible actions, where each timestep only one of the actions can be used.
- * `MultiDiscrete`: A list of possible actions, where each timestep only one action of each discrete set can be used.
- * `MultiBinary`: A list of possible actions, where each timestep any of the actions can be used in any combination.
+<b id="f3">3</b>: Implemented by this GitHub repository.
 
 To train a respective RL-agent, simply run the following code: 
 
