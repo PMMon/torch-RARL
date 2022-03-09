@@ -13,12 +13,11 @@ from models.algorithms import ALGOS
 from utils.exp_manager import ExperimentManager
 from utils.utils import StoreDict
 
-# =========================================================================
-#   Training RL agent on environment specified. 
-#   To promote standardization, the script is as close to 
-#   RL Baselines3 Zoo as possible.
+# ===========================================================================================
+#   Training an RL agent on an environment specified. 
+#   To promote standardization, the script is as close to RL Baselines3 Zoo as possible.
 #   (https://github.com/DLR-RM/rl-baselines3-zoo/blob/master/train.py)   
-# ==========================================================================
+# ===========================================================================================
 
 if __name__ == "__main__": 
     # Fetch CLI arguments
@@ -84,23 +83,6 @@ if __name__ == "__main__":
     parser.add_argument('--adv_delay', type=int, default=-1, help='Delay of adversary')
     parser.add_argument('--adv_fraction', type=float, default=1.0, help='Force-scaling for adversary')
 
-
-
-    parser.add_argument('--path_length', type=int, default=1000, help='maximum episode length')
-    parser.add_argument('--layer_size', nargs='+', type=int, default=[100,100,100], help='layer definition')
-    parser.add_argument('--if_render', type=int, default=0, help='Should we render?')
-    parser.add_argument('--after_render', type=int, default=100, help='After how many to animate')
-    parser.add_argument('--n_exps', type=int, default=1, help='Number of training instances to run')
-    parser.add_argument('--n_itr', type=int, default=25, help='Number of iterations of the alternating optimization')
-    parser.add_argument('--n_pro_itr', type=int, default=1, help='Number of iterations for the portagonist')
-    parser.add_argument('--n_adv_itr', type=int, default=1, help='Number of interations for the adversary')
-    parser.add_argument('--batch_size', type=int, default=4000, help='Number of training samples for each iteration')
-    parser.add_argument('--save_every', type=int, default=100, help='Save checkpoint every save_every iterations')
-    parser.add_argument('--n_process', type=int, default=1, help='Number of parallel threads for sampling environment')
-    parser.add_argument('--step_size', type=float, default=0.01, help='kl step size for TRPO')
-    parser.add_argument('--gae_lambda', type=float, default=0.97, help='gae_lambda for learner')
-    parser.add_argument('--folder', type=str, default=os.environ['HOME'], help='folder to save result in')
-
     args = parser.parse_args()
 
     # check gym environment
@@ -115,7 +97,6 @@ if __name__ == "__main__":
             closest_match = "'no close environment match found...'"
         raise ValueError(f"{env_id} not found in gym registry, did you maybe mean {closest_match}?")
     
-
     # set random seed
     if args.seed < 0:
         args.seed = np.random.randint(2**32 - 1, dtype="int64").item()
