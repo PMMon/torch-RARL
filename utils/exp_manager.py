@@ -1,3 +1,4 @@
+from gc import callbacks
 import os, sys
 import argparse
 import yaml
@@ -210,8 +211,6 @@ class ExperimentManager(object):
         # preprocess action noise
         self._hyperparams = self._preprocess_action_noise(hyperparams, env)
         
-        print("hyperparams: " + str(self._hyperparams))
-
         # define model and account for pre-trained model
         if self.continue_training:
             model = self._load_pretrained_agent(self._hyperparams, env)
@@ -440,11 +439,13 @@ class ExperimentManager(object):
         # if adversarial environment, adapt action space by wrapping into adversarial wrapper
         if self.algo == "rarl" or self.adv_env:
             wrapper_kwargs = {}
-            if not self.env_wrapper:
-                if self.verbose > 0:
-                    print("Using adversarial environment wrapper...")
-                self.env_wrapper = AdversarialClassicControlWrapper
-                wrapper_kwargs.update(dict(adv_fraction=self.adv_fraction))
+            #if not self.env_wrapper:
+            if self.verbose > 0:
+                print("Using adversarial environment wrapper...")
+            self.env_wrapper = AdversarialClassicControlWrapper
+            wrapper_kwargs.update(dict(adv_fraction=self.adv_fraction))
+        else: 
+            wrapper_kwargs = {}
 
         # on most env, SubprocVecEnv does not help and is quite memory hungry, therefore we use DummyVecEnv by default
         env = make_vec_env(
@@ -599,11 +600,12 @@ class ExperimentManager(object):
             )
 
         if len(self.callbacks) > 0:
-            kwargs["callback"] = self.callbacks
+            kwargs["callback"] = [] #self.callbacks
 
             if self.algo == "rarl": 
                 kwargs["callback_protagonist"] = self.callbacks
-                kwargs["callback_adversary"] = self.callbacks
+                callbacks_adversary = []
+                kwargs["callback_adversary"] = [callbacks_adversary.append(callback) for callback in self.callbacks if not isinstance(callback, EvalCallback)]
 
         try:
             if self.algo == "rarl": 
