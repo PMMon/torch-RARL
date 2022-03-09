@@ -241,7 +241,6 @@ class AdversarialClassicControlWrapper(gym.Wrapper):
             return obs, rew, done, info
         else:
             if not self.operating_mode:
-                print("simple action without sampling...")
                 obs, rew, done, info = self.env.step(action)
                 self._last_observation = obs
                 return obs, rew, done, info
@@ -276,9 +275,9 @@ class AdversarialClassicControlWrapper(gym.Wrapper):
             else:
                 raise ValueError(f"Please choose operating mode either 'protagonist' or 'adversary', not: ", self.operating_mode)
 
-            print("action: " + str(action))
-            print("clipped action: " + str(clipped_actions))
-            print("final action: " + str(action + clipped_actions))
+            #print("action: " + str(action))
+            #print("clipped action: " + str(clipped_actions))
+            #print("final action: " + str(action + clipped_actions))
 
             obs, rew, done, info = self.env.step(action + clipped_actions)
             self._last_observation = obs
