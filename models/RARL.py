@@ -272,13 +272,14 @@ class RARL(BaseAlgorithm):
         while iteration_i < total_timesteps:
             if iteration_i > 0:
                 reset_num_timesteps = False
+                self.protagonist.num_timesteps = max(self.protagonist.num_timesteps, self.adversary.num_timesteps - self.adversary.n_steps*self.adversary.env.num_envs)
 
             # perform protagonist rollout and training
             if self.verbose > 0:
                 print("train protagonist...")
 
             callback_protagonist[-1].policy = self.adversary.policy
-            self.protagonist = self.protagonist.learn(total_timesteps_protagonist, 
+            self.protagonist = self.protagonist.learn(total_timesteps_protagonist*self.protagonist.n_steps*self.protagonist.env.num_envs, 
                                                     callback=callback_protagonist, 
                                                     log_interval=log_interval, 
                                                     eval_env=eval_env,
@@ -295,11 +296,10 @@ class RARL(BaseAlgorithm):
                 if self.verbose > 0:
                     print("train adversary...")
 
-                if adv_delay >= 0 and self.adversary.num_timesteps == 0: 
-                    self.adversary.num_timesteps = self.protagonist.num_timesteps
+                self.adversary.num_timesteps = max(self.adversary.num_timesteps, self.protagonist.num_timesteps - self.protagonist.n_steps*self.protagonist.env.num_envs)
 
                 callback_adversary[-1].policy = self.protagonist.policy
-                self.adversary = self.adversary.learn(total_timesteps_adversary, 
+                self.adversary = self.adversary.learn(total_timesteps_adversary*self.adversary.n_steps*self.adversary.env.num_envs, 
                                                         callback=callback_adversary, 
                                                         log_interval=log_interval, 
                                                         eval_env=eval_env,
@@ -307,7 +307,7 @@ class RARL(BaseAlgorithm):
                                                         n_eval_episodes=n_eval_episodes,
                                                         tb_log_name=tb_log_name_adversary,
                                                         eval_log_path=eval_log_path,
-                                                        reset_num_timesteps=reset_num_timesteps,
+                                                        reset_num_timesteps=False,
                                                         **kwargs
                                                         )
             
