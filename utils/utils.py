@@ -60,6 +60,24 @@ def get_wrapper_class(hyperparams: Dict[str, Any]) -> Optional[Callable[[gym.Env
     env_wrapper:
         - utils.wrappers.PlotActionWrapper
         - utils.wrappers.TimeFeatureWrapper
+    
+
+    Taken from RL Baselines3 Zoo 
+    <https://github.com/DLR-RM/rl-baselines3-zoo/blob/master/utils/utils.py>
+
+    MIT License
+
+    Copyright (c) 2019 Antonin RAFFIN
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
 
     :param hyperparams:
     :return: maybe a callable to wrap the environment
@@ -130,6 +148,24 @@ def get_callback_list(hyperparams: Dict[str, Any]) -> List[BaseCallback]:
     callback:
         - utils.callbacks.PlotActionWrapper
         - stable_baselines3.common.callbacks.CheckpointCallback
+
+    
+    Taken from RL Baselines3 Zoo 
+    <https://github.com/DLR-RM/rl-baselines3-zoo/blob/master/utils/utils.py>
+
+    MIT License
+
+    Copyright (c) 2019 Antonin RAFFIN
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
 
     :param hyperparams:
     :return:
