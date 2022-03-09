@@ -1,0 +1,31 @@
+LunarLanderContinuous-v2:
+  n_envs: 16
+  n_timesteps: !!float 1e6
+  protagonist_policy: "MlpPolicy"
+  adversary_policy: "MlpPolicy"
+  protag_layers: [100, 100, 100]
+  adversary_layers: [100, 100, 100]
+  n_steps_protagonist: 128
+  n_steps_adversary: 128
+  protagonist_kwargs: "dict(batch_size=128,
+                            gamma=0.999,
+                            learning_rate=0.007807660745967545,
+                            n_critic_updates=5,
+                            cg_max_steps=10,
+                            target_kl=0.005,
+                            gae_lambda=0.92
+                            )"
+  protagonist_policy_kwargs: "dict(activation_fn=torch.nn.ReLU,
+                              net_arch=[dict(pi=[64, 64], vf=[64, 64])]
+                              )"
+  adversary_kwargs: "dict(batch_size=128,
+                            gamma=0.999,
+                            learning_rate=0.007807660745967545,
+                            n_critic_updates=5,
+                            cg_max_steps=10,
+                            target_kl=0.005,
+                            gae_lambda=0.92
+                            )"
+  adversary_policy_kwargs: "dict(activation_fn=torch.nn.ReLU,
+                              net_arch=[dict(pi=[64, 64], vf=[64, 64])]
+                              )"
