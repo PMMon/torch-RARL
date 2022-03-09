@@ -3,6 +3,7 @@ from gym import Env, spaces
 import numpy as np
 import torch 
 from stable_baselines3.common.utils import obs_as_tensor
+from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvWrapper, VecEnvStepReturn
 
 # ================================================
 #   Define and customize gym environment wrapper
@@ -133,11 +134,34 @@ class AdversaryRewardWrapper(gym.RewardWrapper):
     Adapts the reward function of the adversary in RARL
     """
     def __init__(self, env):
-        super().__init__(env)
+        self.action_space(env.adv_action_space)
+        super().__init__(env=env)
     
     def reward(self, rew):
         # modify rew
         return -rew
+
+
+class AdversaryRewardVecEnvWrapper(VecEnvWrapper):
+    """
+    Adapts the reward function of the adversary in RARL
+    """
+    def __init__(self, venv: VecEnv):
+        super().__init__(venv=venv, action_space=venv.get_attr("adv_action_space")[0])
+    
+    def step_wait(self) -> VecEnvStepReturn:
+        obs, reward, done, info = self.venv.step_wait()
+        return obs, -reward, done, info
+
+    #def reward(self, rew):
+    #    # modify rew
+    #    return -rew
+    
+    def step_async(self, actions: np.ndarray) -> None:
+        self.venv.step_async(actions)
+
+    def reset(self) -> np.ndarray:
+        return self.venv.reset()
 
 
 class AdversarialClassicControlWrapper(gym.Wrapper):
@@ -252,9 +276,9 @@ class AdversarialClassicControlWrapper(gym.Wrapper):
             else:
                 raise ValueError(f"Please choose operating mode either 'protagonist' or 'adversary', not: ", self.operating_mode)
 
-            #print("action: " + str(action))
-            #print("clipped action: " + str(clipped_actions))
-            #print("final action: " + str(action + clipped_actions))
+            print("action: " + str(action))
+            print("clipped action: " + str(clipped_actions))
+            print("final action: " + str(action + clipped_actions))
 
             obs, rew, done, info = self.env.step(action + clipped_actions)
             self._last_observation = obs
