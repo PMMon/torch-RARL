@@ -144,7 +144,7 @@ class AdversaryRewardWrapper(gym.RewardWrapper):
 
 class AdversaryRewardVecEnvWrapper(VecEnvWrapper):
     """
-    Adapts the reward function of the adversary in RARL
+    Adapts the reward function of the adversary in RARL for vector environments
     """
     def __init__(self, venv: VecEnv):
         super().__init__(venv=venv, action_space=venv.get_attr("adv_action_space")[0])
@@ -152,10 +152,6 @@ class AdversaryRewardVecEnvWrapper(VecEnvWrapper):
     def step_wait(self) -> VecEnvStepReturn:
         obs, reward, done, info = self.venv.step_wait()
         return obs, -reward, done, info
-
-    #def reward(self, rew):
-    #    # modify rew
-    #    return -rew
     
     def step_async(self, actions: np.ndarray) -> None:
         self.venv.step_async(actions)
@@ -166,7 +162,8 @@ class AdversaryRewardVecEnvWrapper(VecEnvWrapper):
 
 class AdversarialClassicControlWrapper(gym.Wrapper):
     """
-    Adapts the action space of the gym environment for the adversary
+    Adapts the action space of the gym environment for the adversary and couples 
+    actions from protagonist and adversary during training
     """
     def __init__(self, env: Env, adv_fraction: float = 1.0):
         super(AdversarialClassicControlWrapper, self).__init__(env)
@@ -274,10 +271,6 @@ class AdversarialClassicControlWrapper(gym.Wrapper):
                     clipped_actions = np.clip(clipped_actions, self._action_space.low, self._action_space.high).squeeze(0)
             else:
                 raise ValueError(f"Please choose operating mode either 'protagonist' or 'adversary', not: ", self.operating_mode)
-
-            #print("action: " + str(action))
-            #print("clipped action: " + str(clipped_actions))
-            #print("final action: " + str(action + clipped_actions))
 
             obs, rew, done, info = self.env.step(action + clipped_actions)
             self._last_observation = obs
