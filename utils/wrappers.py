@@ -2,8 +2,9 @@ import gym
 from gym import Env, spaces
 import numpy as np
 import torch
-from copy import deepcopy
-from stable_baselines3.common.utils import obs_as_tensor
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+from stable_baselines3.common.utils import obs_as_tensor, get_device
 from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvWrapper, VecEnvStepReturn
 
 # ================================================
@@ -137,7 +138,8 @@ class AdversaryRewardWrapper(gym.RewardWrapper):
     def __init__(self, env):
         self.action_space(env.adv_action_space)
         super().__init__(env=env)
-    
+
+
     def reward(self, rew):
         # modify rew
         return -rew
@@ -149,7 +151,8 @@ class AdversaryRewardVecEnvWrapper(VecEnvWrapper):
     """
     def __init__(self, venv: VecEnv):
         super().__init__(venv=venv, action_space=venv.get_attr("adv_action_space")[0])
-    
+
+
     def step_wait(self) -> VecEnvStepReturn:
         obs, reward, done, info = self.venv.step_wait()
         return obs, -reward, done, info
@@ -166,7 +169,7 @@ class AdversarialClassicControlWrapper(gym.Wrapper):
     Adapts the action space of the gym environment for the adversary and couples 
     actions from protagonist and adversary during training
     """
-    def __init__(self, env: Env, adv_fraction: float = 1.0):
+    def __init__(self, env: Env, adv_fraction: float = 1.0, device: str = "auto"):
         super(AdversarialClassicControlWrapper, self).__init__(env)
         self.env = env
         # define adversarial impact
@@ -177,12 +180,12 @@ class AdversarialClassicControlWrapper(gym.Wrapper):
         self._action_space = env.action_space
         self._initial_action_space = env.action_space
         self._observation_space = env.observation_space
-    
+
         self.operating_mode = None
         self._pro_policy = None
         self._adv_policy = None
 
-        self.device = "cuda"
+        self.device = get_device(device)
 
         self._last_obs = None
         self._last_episode_starts = None
@@ -210,20 +213,6 @@ class AdversarialClassicControlWrapper(gym.Wrapper):
 
     def set_action_space(self, updated_action_space): 
         self._action_space = updated_action_space
-
-
-    def sample_adv_policy(self, adv_policy):
-        print("additional sample from adversary policy...")
-        self.operating_mode = "protagonist"
-        self._adv_policy = adv_policy
-        self._adv_policy.set_training_mode(False)
-    
-
-    def sample_pro_policy(self, pro_policy):
-        print("additional sample from protagonist policy...")
-        self.operating_mode = "adversary"
-        self._pro_policy = pro_policy
-        self._pro_policy.set_training_mode(False)
 
 
     def sample_action(self):
@@ -315,5 +304,177 @@ class AdversarialClassicControlWrapper(gym.Wrapper):
             raise NotImplementedError
 
 
+class AdversarialMujocoWrapper(gym.Wrapper):
+    """
+    Modeling errors can be viewed as extra forces in the system.
+    This wrapper allows the adversary to apply disturbing forces to the system in order
+    to counteract the protagonist's goal.
+    The wrapper replaces the customized environments defined in: 
+    Lerrel Pinto: "Gym environments with adversarial disturbance agents" <https://github.com/lerrel/gym-adv>.
+    """
+    def __init__(self, env: Env, adv_low: float = -1.0, adv_high: float = 1.0, index_list: List[str] = [], force_dim: int = 2, device: str = "auto"):
+        super(AdversarialMujocoWrapper, self).__init__(env)
+        self.env = env
+        self.force_dim = force_dim
 
+        # define point of attack
+        self._adv_force_bname = index_list
+        bnames = self.env.model.__getattribute__("body_names") 
+
+        try: 
+            self._adv_body_indicees = [bnames.index(i) for i in self._adv_force_bname]
+        except: 
+            raise AttributeError("Environment: %s does not include all body names in list: %s\n Please use body names available from here: %s" % (env.spec.id, index_list, bnames))
+        
+        adv_action_space_dim = force_dim*len(self._adv_body_indicees)
+        self._adv_action_space = spaces.Box(np.ones(adv_action_space_dim, dtype=np.float32) * adv_low, np.ones(adv_action_space_dim, dtype=np.float32) * adv_high)
+        self._action_space = env.action_space
+        self._initial_action_space = env.action_space
+        self._observation_space = env.observation_space
+
+        self.operating_mode = None
+        self._pro_policy = None
+        self._adv_policy = None
+
+        self.device = get_device(device)
+
+        self._last_obs = None
+        self._last_episode_starts = None
+
+
+    def _apply_adv_to_xfrc(self, adv_act):
+        assert adv_act.shape[0] >= self.force_dim
+        # get force mask
+        new_xfrc = self.env.sim.data.xfrc_applied*0.0
+        # apply forces at contact points
+        for i, bindex in enumerate(self._adv_body_indicees):
+            if self.force_dim == 1: 
+                new_xfrc[bindex] = np.array([adv_act[i], 0., 0., 0., 0., 0.])
+            elif self.force_dim == 2: 
+                new_xfrc[bindex] = np.array([adv_act[i*2], 0., adv_act[i*2+1], 0., 0., 0.])
+            elif self.force_dim == 3: 
+                new_xfrc[bindex] = np.array([adv_act[i*3], adv_act[i*3+1], adv_act[i*3+2], 0., 0., 0.])
+            elif self.force_dim == 4: 
+                new_xfrc[bindex] = np.array([adv_act[i*4], adv_act[i*4+1], adv_act[i*4+2], adv_act[i*4+3], 0., 0.])
+            elif self.force_dim == 5: 
+                new_xfrc[bindex] = np.array([adv_act[i*5], adv_act[i*5+1], adv_act[i*5+2], adv_act[i*5+3], 0., adv_act[i*5+4]])
+            elif self.force_dim == 6: 
+                new_xfrc[bindex] = np.array([adv_act[i*6], adv_act[i*6+1], adv_act[i*6+2], adv_act[i*6+3], adv_act[i*6+4], adv_act[i*6+5]])
+            else: 
+                raise ValueError(f"Force dimension must be within [1, 6], not: ", self.force_dim)
+
+        self.env.sim.data.xfrc_applied[:] = new_xfrc
+
+
+    def sample_action(self):
+        class pro_adv_action(object):
+            def __init__(self, pro_action, adv_action):
+                self.pro_action = pro_action
+                self.adv_action = adv_action
+
+        return pro_adv_action(self.action_space.sample(), self.adv_action_space.sample())
+
+
+    def step(self, action):
+        if hasattr(action, '__dict__'):
+            print("action has dict")
+            # apply force to system
+            self._apply_adv_to_xfrc(action.adv_action)
+            # perform step
+            obs, rew, done, info = self.env.step(action.pro_action)
+            self._last_obs = obs
+            self._last_episode_starts = done
+            return obs, rew, done, info
+        else:
+            if not self.operating_mode:
+                # no adversarial influence
+                obs, rew, done, info = self.env.step(action)
+                self._last_obs = obs
+                self._last_episode_starts = done
+                return obs, rew, done, info
+
+            elif self.operating_mode.lower() == "protagonist":
+                # sample action from adversary
+                with torch.no_grad():
+                    # convert to pytorch tensor or to TensorDict
+                    obs_tensor = obs_as_tensor(self._last_obs, self.device)
+                    if len(obs_tensor.shape) == 1:
+                        obs_tensor = obs_tensor.unsqueeze(0)
+                    action_sampled  = self._adv_policy._predict(obs_tensor, deterministic=True)
+
+                clipped_actions = action_sampled.cpu().numpy()
+
+                # clip the actions to avoid out of bound error
+                if isinstance(self._adv_action_space, gym.spaces.Box):
+                    clipped_actions = np.clip(clipped_actions, self._adv_action_space.low, self._adv_action_space.high).squeeze(0)
+                
+                # apply force to system
+                self._apply_adv_to_xfrc(clipped_actions)
+                # perform step
+                obs, rew, done, info = self.env.step(action)
+
+                self._last_obs = obs
+                self._last_episode_starts = done
+
+                return obs, rew, done, info
+                
+            elif self.operating_mode.lower() == "adversary":
+                # sample action from protagonist
+                with torch.no_grad():
+                    # Convert to pytorch tensor or to TensorDict
+                    obs_tensor = obs_as_tensor(self._last_obs, self.device)
+                    if len(obs_tensor.shape) == 1:
+                        obs_tensor = obs_tensor.unsqueeze(0)
+                    action_sampled = self._pro_policy._predict(obs_tensor, deterministic=True)
+
+                clipped_actions = action_sampled.cpu().numpy()
+
+                # Clip the actions to avoid out of bound error
+                if isinstance(self._action_space, gym.spaces.Box):
+                    clipped_actions = np.clip(clipped_actions, self._action_space.low, self._action_space.high).squeeze(0)
+                
+                # apply force to system
+                self._apply_adv_to_xfrc(action)
+                # perform step
+                obs, rew, done, info = self.env.step(clipped_actions)
+
+                self._last_obs = obs
+                self._last_episode_starts = done
+
+                return obs, rew, done, info
+                
+            else:
+                raise ValueError(f"Please choose operating mode either 'protagonist' or 'adversary', not: ", self.operating_mode)
+
+
+    @property
+    def observation_space(self):
+        return self._observation_space
+
+
+    @property
+    def action_space(self):
+        return self._action_space
+
+
+    @property
+    def adv_action_space(self):
+        return self._adv_action_space
+    
+
+    def set_action_space(self, updated_action_space): 
+        self._action_space = updated_action_space
+    
+
+    def set_adv_action_space(self, updated_adv_action_space): 
+        self._adv_action_space = updated_adv_action_space
+
+
+    def reset(self):
+        self._last_obs = self.env.reset()
+        return self._last_obs
+
+
+    def render(self):
+        self.env.render()
 

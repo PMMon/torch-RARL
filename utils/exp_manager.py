@@ -12,7 +12,6 @@ from collections import OrderedDict
 from pprint import pprint
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import torch
-import copy
 
 from optuna.samplers import BaseSampler, RandomSampler, TPESampler
 from optuna.integration.skopt import SkoptSampler
@@ -32,7 +31,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.
 from utils.hyperparams_opt import HYPERPARAMS_SAMPLER
 from utils.utils import get_latest_run_id, linear_schedule, get_wrapper_class, get_callback_list
 from utils.callbacks import SaveVecNormalizeCallback, TrialEvalCallback, SetupProTrainingCallback, SetupAdvTrainingCallback
-from utils.wrappers import AdversarialClassicControlWrapper
+from utils.wrappers import AdversarialClassicControlWrapper, AdversarialMujocoWrapper
 from models.algorithms import ALGOS
 
 
@@ -92,8 +91,13 @@ class ExperimentManager(object):
         n_eval_envs: int = 1,
         no_optim_plots: bool = False,
         adv_env: bool = False,
+        adv_impact: str = "",
         adv_fraction: float = 1.0,
         adv_delay: int = -1,
+        adv_low: float = -1.0, 
+        adv_high: float = 1.0,
+        adv_index_list: List = None,
+        adv_force_dim: int = 2,
         total_steps_protagonist: int = 10, 
         total_steps_adversary: int = 10,
     ) -> None:
@@ -123,6 +127,11 @@ class ExperimentManager(object):
 
         # adversarial env
         self.adv_fraction = adv_fraction
+        self.adv_impact = adv_impact
+        self.adv_low = adv_low
+        self.adv_high = adv_high
+        self.adv_index_list = adv_index_list
+        self.adv_force_dim = adv_force_dim
 
         # training
         self.n_timesteps = n_timesteps
@@ -456,8 +465,12 @@ class ExperimentManager(object):
             #if not self.env_wrapper:
             if self.verbose > 0:
                 print("Using adversarial environment wrapper...")
-            self.env_wrapper = AdversarialClassicControlWrapper
-            wrapper_kwargs.update(dict(adv_fraction=self.adv_fraction))
+            if self.adv_impact.lower() == "control":
+                self.env_wrapper = AdversarialClassicControlWrapper
+                wrapper_kwargs.update(dict(adv_fraction=self.adv_fraction))
+            elif self.adv_impact.lower() == "force": 
+                self.env_wrapper = AdversarialMujocoWrapper
+                wrapper_kwargs.update(dict(adv_low=self.adv_low, adv_high=self.adv_high, index_list=self.adv_index_list, force_dim=self.adv_force_dim))
         else: 
             wrapper_kwargs = {}
 
@@ -606,12 +619,6 @@ class ExperimentManager(object):
         kwargs = {}
         if self.log_interval > -1:
             kwargs = {"log_interval": self.log_interval}
-
-        if False: 
-            self.callbacks.append(
-                SetupProTrainingCallback(policy=model.policy, #copy.deepcopy(model.policy),
-                                         verbose=self.verbose)
-            )
 
         if len(self.callbacks) > 0:
             kwargs["callback"] = self.callbacks
