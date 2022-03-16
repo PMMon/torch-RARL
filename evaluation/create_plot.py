@@ -27,10 +27,11 @@ class PlotEvaluation:
 
     def single_plot(self):
         """
-        Plot signals in single frame
+        Plot signals of different algorithms in single frame
         """
         signal_dict = {}
 
+        # read signals, calculate mean and std deviation
         print("Access %s..." % self.input_path)
         for algo in self.args.algos:
             print("Read files for algorithm: %s" % algo)
@@ -56,8 +57,6 @@ class PlotEvaluation:
         # plotting
         print("create plot...")
 
-        #plt.rc('font', family='serif', serif='Times')
-        #plt.rc('text', usetex=True)
         plt.rc('xtick', labelsize=14)
         plt.rc('ytick', labelsize=14)
         plt.rc('axes', labelsize=14)
@@ -80,23 +79,22 @@ class PlotEvaluation:
             plt.plot(signal_dict[algo]["x_value"], signal_dict[algo]["mean"], self.args.mean_color_list[i], linewidth=1.0, label=label)
             plt.fill_between(signal_dict[algo]["x_value"], signal_dict[algo]["mean"]-signal_dict[algo]["std"], signal_dict[algo]["mean"]+signal_dict[algo]["std"], facecolor=self.args.std_color_list[i], edgecolor=self.args.std_color_list[i])
 
-        # Title 
+        # title 
         plt.title(self.args.title)
 
-        # Axis
+        # axis
         ax.set_ylabel(self.args.ylabel)
         ax.set_xlabel(self.args.xlabel)
 
         ax.xaxis.set_major_formatter(ticker.EngFormatter())
         ax.xaxis.set_ticks(np.arange(0, max(signal_dict[self.args.algos[0]]["x_value"]), 100000), minor=True)
-        #ax.yaxis.set_ticks(np.arange(0, 1.1, 0.1))
-        #ax.tick_params(axis='x', which='minor', bottom=False)
 
-        # Legend 
+        # legend 
         ax.legend(bbox_to_anchor=(1, 0.3))
 
         fig.set_size_inches(width, height)
 
+        # save plot
         if self.args.plotname == "":
             for algo in self.args.algos:
                 self.args.plotname += algo + "_"
@@ -114,7 +112,7 @@ if __name__ == "__main__":
     output_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'plots_created'))
 
     # Get input arguments from shell
-    parser = argparse.ArgumentParser("Create plots")
+    parser = argparse.ArgumentParser("Create evaluation plots")
 
     # General configs for Plotting
     parser.add_argument("--plotname", default="", type=str, help="Specify name of plot")
