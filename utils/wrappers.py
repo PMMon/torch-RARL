@@ -1,7 +1,8 @@
 import gym
 from gym import Env, spaces
 import numpy as np
-import torch 
+import torch
+from copy import deepcopy
 from stable_baselines3.common.utils import obs_as_tensor
 from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvWrapper, VecEnvStepReturn
 
@@ -183,6 +184,10 @@ class AdversarialClassicControlWrapper(gym.Wrapper):
 
         self.device = "cuda"
 
+        self._last_obs = None
+        self._last_episode_starts = None
+
+
     @property
     def observation_space(self):
         return self._observation_space
@@ -234,18 +239,20 @@ class AdversarialClassicControlWrapper(gym.Wrapper):
         if hasattr(action, '__dict__'):
             print("action has dict")
             obs, rew, done, info = self.env.step(action.pro_action + action.adv_action)
-            self._last_observation = obs
+            self._last_obs = obs
+            self._last_episode_starts = done
             return obs, rew, done, info
         else:
             if not self.operating_mode:
                 obs, rew, done, info = self.env.step(action)
-                self._last_observation = obs
+                self._last_obs = obs
+                self._last_episode_starts = done
                 return obs, rew, done, info
 
             elif self.operating_mode.lower() == "protagonist":
                 with torch.no_grad():
                     # Convert to pytorch tensor or to TensorDict
-                    obs_tensor = obs_as_tensor(self._last_observation, self.device)
+                    obs_tensor = obs_as_tensor(self._last_obs, self.device)
                     if len(obs_tensor.shape) == 1:
                         obs_tensor = obs_tensor.unsqueeze(0)
                     action_sampled  = self._adv_policy._predict(obs_tensor, deterministic=True)
@@ -255,11 +262,11 @@ class AdversarialClassicControlWrapper(gym.Wrapper):
                 # Clip the actions to avoid out of bound error
                 if isinstance(self._adv_action_space, gym.spaces.Box):
                     clipped_actions = np.clip(clipped_actions, self._adv_action_space.low, self._adv_action_space.high).squeeze(0)
-
+                
             elif self.operating_mode.lower() == "adversary":
                 with torch.no_grad():
                     # Convert to pytorch tensor or to TensorDict
-                    obs_tensor = obs_as_tensor(self._last_observation, self.device)
+                    obs_tensor = obs_as_tensor(self._last_obs, self.device)
                     if len(obs_tensor.shape) == 1:
                         obs_tensor = obs_tensor.unsqueeze(0)
                     action_sampled = self._pro_policy._predict(obs_tensor, deterministic=True)
@@ -269,17 +276,20 @@ class AdversarialClassicControlWrapper(gym.Wrapper):
                 # Clip the actions to avoid out of bound error
                 if isinstance(self._action_space, gym.spaces.Box):
                     clipped_actions = np.clip(clipped_actions, self._action_space.low, self._action_space.high).squeeze(0)
+                
             else:
                 raise ValueError(f"Please choose operating mode either 'protagonist' or 'adversary', not: ", self.operating_mode)
 
             obs, rew, done, info = self.env.step(action + clipped_actions)
-            self._last_observation = obs
+            self._last_obs = obs
+            self._last_episode_starts = done
+
             return obs, rew, done, info
     
 
     def reset(self):
-        self._last_observation = self.env.reset()
-        return self._last_observation
+        self._last_obs = self.env.reset()
+        return self._last_obs
 
 
     def render(self):

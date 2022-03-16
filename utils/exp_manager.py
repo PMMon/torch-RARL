@@ -295,6 +295,16 @@ class ExperimentManager(object):
                 print(f"Overwriting n_timesteps with n={self.n_timesteps}")
         else:
             self.n_timesteps = int(hyperparams["n_timesteps"])
+        
+        # rarl - overwrite number of timesteps of protagonist and adversary
+        if self.algo == "rarl":
+            if self.n_timesteps > 0:
+                if self.verbose > 0:
+                    print(f"Overwriting total_steps_protagonist with n_mu={self.total_steps_protagonist}")
+                    print(f"Overwriting total_steps_adversary with n_nu={self.total_steps_adversary}")
+            else:
+                self.total_steps_protagonist = int(hyperparams["total_steps_protagonist"])
+                self.total_steps_adversary = int(hyperparams["total_steps_adversary"])
 
         # pre-process normalization config
         hyperparams = self._preprocess_normalization(hyperparams)
@@ -308,6 +318,10 @@ class ExperimentManager(object):
         if "n_envs" in hyperparams.keys():
             del hyperparams["n_envs"]
         del hyperparams["n_timesteps"]
+
+        if self.algo == "rarl":
+            del hyperparams["total_steps_protagonist"]
+            del hyperparams["total_steps_adversary"]
 
         if "frame_stack" in hyperparams.keys():
             self.frame_stack = hyperparams["frame_stack"]
@@ -600,7 +614,7 @@ class ExperimentManager(object):
             )
 
         if len(self.callbacks) > 0:
-            kwargs["callback"] = [] #self.callbacks
+            kwargs["callback"] = self.callbacks
 
             if self.algo == "rarl": 
                 kwargs["callback_protagonist"] = self.callbacks
