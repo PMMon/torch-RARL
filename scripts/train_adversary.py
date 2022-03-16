@@ -27,6 +27,7 @@ if __name__ == "__main__":
     parser.add_argument("--verbose", type=int, default=0, choices=[0, 1], help="Verbose mode (0: no output, 1: INFO)")
     parser.add_argument("--seed", type=int, default=-1, help="Random generator seed")
     parser.add_argument("--num_threads", type=int, default=-1, help="Number of threads for PyTorch")
+    parser.add_argument("--num_exps", type=int, default=1, help="Number of experiments")
 
     # Configs about environment
     parser.add_argument('--env', type=str, default="BipedalWalker-v3", help='Name of gym environment')
@@ -85,87 +86,92 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # check gym environment
-    env_id = args.env
-    registered_envs = set(gym.envs.registry.env_specs.keys())
+    # iterate for number of experiments
+    for exp in range(args.num_exps):
+        # check gym environment
+        env_id = args.env
+        registered_envs = set(gym.envs.registry.env_specs.keys())
 
-    # if environment is not found, suggest the closest match
-    if env_id not in registered_envs:
-        try:
-            closest_match = difflib.get_close_matches(env_id, registered_envs, n=1)[0]
-        except IndexError:
-            closest_match = "'no close environment match found...'"
-        raise ValueError(f"{env_id} not found in gym registry, did you maybe mean {closest_match}?")
-    
-    # set random seed
-    if args.seed < 0:
-        args.seed = np.random.randint(2**32 - 1, dtype="int64").item()
-    
-    set_random_seed(args.seed)
+        # if environment is not found, suggest the closest match
+        if env_id not in registered_envs:
+            try:
+                closest_match = difflib.get_close_matches(env_id, registered_envs, n=1)[0]
+            except IndexError:
+                closest_match = "'no close environment match found...'"
+            raise ValueError(f"{env_id} not found in gym registry, did you maybe mean {closest_match}?")
+        
+        # set random seed
+        if args.seed < 0:
+            args.seed = np.random.randint(2**32 - 1, dtype="int64").item()
+        
+        set_random_seed(args.seed)
 
-    # set number of threads 
-    if args.num_threads > 0: 
-        if args.verbose == 1: 
-            print(f"Setting torch.num_threads to {args.num_threads}")
-        torch.set_num_threads(args.num_threads)
-    
-    model_path = os.path.join(args.saved_models_path, args.algo.lower(), env_id)
+        # set number of threads 
+        if args.num_threads > 0: 
+            if args.verbose == 1: 
+                print(f"Setting torch.num_threads to {args.num_threads}")
+            torch.set_num_threads(args.num_threads)
+        
+        model_path = os.path.join(args.saved_models_path, args.algo.lower(), env_id)
 
-    # check path
-    if args.pretrained_model != "":
-        assert os.path.isfile(os.path.join(model_path, args.pretrained_model, env_id + ".zip")), f"The pretrained_agent must be a valid path to a .zip file. Check path to {os.path.join(model_path, args.pretrained_model)}"
-    
-    # print information
-    print("=" * 10, env_id, "=" * 10)
-    print(f"Seed: {args.seed}")
+        # check path
+        if args.pretrained_model != "":
+            assert os.path.isfile(os.path.join(model_path, args.pretrained_model, env_id + ".zip")), f"The pretrained_agent must be a valid path to a .zip file. Check path to {os.path.join(model_path, args.pretrained_model)}"
+        
+        # print information
+        print("=" * 10, env_id, "=" * 10)
+        print(f"Seed: {args.seed}")
 
-    # experiment manager
-    exp_manager = ExperimentManager(
-        args, 
-        algo=args.algo,
-        env_id=env_id,
-        log_folder=args.log_folder,
-        tensorboard_log=args.tensorboard_log,
-        n_timesteps=args.n_timesteps,
-        eval_freq=args.eval_freq,
-        n_eval_episodes=args.n_eval_episodes,
-        save_freq=args.save_freq,
-        hyperparameter_path=args.hyperparameter_path,
-        hyperparams=args.hyperparameter,
-        env_kwargs=args.env_kwargs,
-        model_path=model_path,
-        pretrained_model = args.pretrained_model,
-        optimize_hyperparameters=args.optimize_hyperparameters,
-        storage=args.storage,
-        study_name=args.study_name,
-        n_opt_trials=args.n_opt_trials,
-        n_jobs=args.n_jobs,
-        sampler=args.sampler,
-        pruner=args.pruner,
-        optimization_log_path=args.optimization_log_path,
-        n_startup_trials=args.n_startup_trials,
-        n_evaluations_opt=args.n_evaluations_opt,
-        seed=args.seed,
-        log_interval=args.log_interval,
-        save_replay_buffer=args.save_replay_buffer,
-        verbose=args.verbose,
-        vec_env_type=args.vec_env_type,
-        n_envs=args.n_envs,
-        n_eval_envs=args.n_eval_envs,
-        no_optim_plots=args.no_optim_plots,
-        adv_env=args.adv_env, 
-        adv_fraction=args.adv_fraction,
-        adv_delay=args.adv_delay,
-        total_steps_protagonist=args.total_steps_protagonist,
-        total_steps_adversary=args.total_steps_adversary
-    )
+        # experiment manager
+        exp_manager = ExperimentManager(
+            args, 
+            algo=args.algo,
+            env_id=env_id,
+            log_folder=args.log_folder,
+            tensorboard_log=args.tensorboard_log,
+            n_timesteps=args.n_timesteps,
+            eval_freq=args.eval_freq,
+            n_eval_episodes=args.n_eval_episodes,
+            save_freq=args.save_freq,
+            hyperparameter_path=args.hyperparameter_path,
+            hyperparams=args.hyperparameter,
+            env_kwargs=args.env_kwargs,
+            model_path=model_path,
+            pretrained_model = args.pretrained_model,
+            optimize_hyperparameters=args.optimize_hyperparameters,
+            storage=args.storage,
+            study_name=args.study_name,
+            n_opt_trials=args.n_opt_trials,
+            n_jobs=args.n_jobs,
+            sampler=args.sampler,
+            pruner=args.pruner,
+            optimization_log_path=args.optimization_log_path,
+            n_startup_trials=args.n_startup_trials,
+            n_evaluations_opt=args.n_evaluations_opt,
+            seed=args.seed,
+            log_interval=args.log_interval,
+            save_replay_buffer=args.save_replay_buffer,
+            verbose=args.verbose,
+            vec_env_type=args.vec_env_type,
+            n_envs=args.n_envs,
+            n_eval_envs=args.n_eval_envs,
+            no_optim_plots=args.no_optim_plots,
+            adv_env=args.adv_env, 
+            adv_fraction=args.adv_fraction,
+            adv_delay=args.adv_delay,
+            total_steps_protagonist=args.total_steps_protagonist,
+            total_steps_adversary=args.total_steps_adversary
+        )
 
-    # Prepare experiment and launch hyperparameter optimization if needed
-    model = exp_manager.setup_experiment()
+        # Prepare experiment and launch hyperparameter optimization if needed
+        model = exp_manager.setup_experiment()
 
-    # Normal training
-    if model is not None:
-        exp_manager.learn(model)
-        exp_manager.save_trained_model(model)
-    else:
-        exp_manager.hyperparameters_optimization()
+        # Normal training
+        if model is not None:
+            exp_manager.learn(model)
+            exp_manager.save_trained_model(model)
+        else:
+            exp_manager.hyperparameters_optimization()
+        
+        # increase seed
+        args.seed += 1
