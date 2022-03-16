@@ -75,14 +75,19 @@ if __name__ == "__main__":
     # Configs for RARL
     parser.add_argument('--protagonist_policy', type=str, default="MlpPolicy", help='Policy of protagonist')
     parser.add_argument('--adversary_policy', type=str, default="MlpPolicy", help='Policy of adversary')
-    parser.add_argument('--protag_layers', nargs='+', type=int, default=[100, 100, 100], help='Layer specification for actor')
-    parser.add_argument('--adversary_layers', nargs='+', type=int, default=[100, 100, 100], help='Layer specification for critic')
 
     parser.add_argument('--total_steps_protagonist', type=int, default=10, help='Number of steps to run for each environment per protagonist update')
     parser.add_argument('--total_steps_adversary', type=int, default=10, help='Number of steps to run for each environment per adversary update')
 
+    # Configs for adversarial environment
+    parser.add_argument('--adv_impact', type=str, default="control", choices=["control", "force"], help='Define how adversary impacts agent')
     parser.add_argument('--adv_delay', type=int, default=-1, help='Delay of adversary')
+    parser.add_argument('--adv_low', type=float, default=-1.0, help='Minimal adversarial impact')
+    parser.add_argument('--adv_high', type=float, default=1.0, help='Maximal adversarial impact')
     parser.add_argument('--adv_fraction', type=float, default=1.0, help='Force-scaling for adversary')
+    parser.add_argument('--adv_index_list', nargs='+', type=str, default=["torso"], help='Contact point for adversarial forces (for Mujoco environments)')
+    parser.add_argument('--adv_force_dim', type=int, default=2, help='Dimension of adversarial force')
+
 
     args = parser.parse_args()
 
@@ -157,8 +162,13 @@ if __name__ == "__main__":
             n_eval_envs=args.n_eval_envs,
             no_optim_plots=args.no_optim_plots,
             adv_env=args.adv_env, 
+            adv_impact=args.adv_impact,
             adv_fraction=args.adv_fraction,
             adv_delay=args.adv_delay,
+            adv_low=args.adv_low, 
+            adv_high=args.adv_high,
+            adv_index_list=args.adv_index_list,
+            adv_force_dim=args.adv_force_dim,
             total_steps_protagonist=args.total_steps_protagonist,
             total_steps_adversary=args.total_steps_adversary
         )
