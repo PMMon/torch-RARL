@@ -7,17 +7,19 @@ import time
 import torch
 import numpy as np
 from typing import Any, Dict, List, Iterable, Optional, Type, Union, Tuple
+import copy
 
 from sb3_contrib import TRPO
 from stable_baselines3.common import utils
 from stable_baselines3.common.on_policy_algorithm import BaseAlgorithm
-from stable_baselines3.common.policies import ActorCriticPolicy
+from stable_baselines3.common.policies import ActorCriticPolicy, MultiInputActorCriticPolicy
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback
 from stable_baselines3.common.vec_env import VecEnv
 from stable_baselines3.common.save_util import load_from_zip_file, recursive_setattr, recursive_getattr, save_to_zip_file
 from stable_baselines3.common.utils import (
     get_system_info,
+    obs_as_tensor
 )
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
@@ -91,7 +93,7 @@ class RARL(BaseAlgorithm):
         if "n_steps_protagonist" in self.protagonist_kwargs: 
             n_steps_protagonist = self.protagonist_kwargs["n_steps_protagonist"]
 
-        self.protagonist = TRPO(policy=protagonist_policy, env=env, n_steps=n_steps_protagonist, policy_kwargs=self.protagonist_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, create_eval_env=create_eval_env, **self.protagonist_kwargs)
+        self.protagonist = TRPO(policy=self.protagonist_policy, env=env, n_steps=n_steps_protagonist, policy_kwargs=self.protagonist_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, create_eval_env=create_eval_env, seed=seed, **self.protagonist_kwargs)
 
         # define adversary
         if adversary_kwargs is None: 
@@ -119,8 +121,12 @@ class RARL(BaseAlgorithm):
         else: 
             adv_env = AdversaryRewardWrapper(env)
 
-        self.adversary = TRPO(policy=adversary_policy, env=adv_env, n_steps=n_steps_adversary, policy_kwargs=self.adversary_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, create_eval_env=create_eval_env, **self.adversary_kwargs)
+        self.adversary = TRPO(policy=self.adversary_policy, env=adv_env, n_steps=n_steps_adversary, policy_kwargs=self.adversary_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, create_eval_env=create_eval_env, seed=seed, **self.adversary_kwargs)
         
+        # trajectory management
+        self.saved_last_pro_obs = None
+        self.saved_last_adv_obs = None
+
 
     def _setup_model(self) -> None:
         """Create networks, buffer and optimizers."""
@@ -279,21 +285,28 @@ class RARL(BaseAlgorithm):
         # protagonist and adversary callbacks
         if not callback_protagonist: 
             callback_protagonist = []
-        callback_protagonist.append(SetupProTrainingCallback(policy=self.adversary.policy, #copy.deepcopy(model.policy),
+        callback_protagonist.append(SetupProTrainingCallback(policy=self.adversary.policy,
                                                              verbose=self.verbose))
         if not callback_adversary:
             callback_adversary = []
-        callback_adversary.append(SetupAdvTrainingCallback(policy=self.protagonist.policy, #copy.deepcopy(model.policy),
+        callback_adversary.append(SetupAdvTrainingCallback(policy=self.protagonist.policy,
                                                            verbose=self.verbose))
 
         while iteration_i < total_timesteps:
             if iteration_i > 0:
                 reset_num_timesteps = False
-                self.protagonist.num_timesteps = max(self.protagonist.num_timesteps, self.adversary.num_timesteps - self.adversary.n_steps*self.adversary.env.num_envs)
+                #self.protagonist.num_timesteps = max(self.protagonist.num_timesteps, self.adversary.num_timesteps - self.adversary.n_steps*self.adversary.env.num_envs)    #edited
 
             # perform protagonist rollout and training
             if self.verbose > 0:
                 print("train protagonist...")
+            
+
+            # sync environment with protagonist
+            if not reset_num_timesteps:
+                self.protagonist.rollout_buffer = self.adversary.rollout_buffer
+                self.protagonist._last_obs = np.array(self.protagonist.env.get_attr("_last_obs"), dtype=np.float32)
+                self.protagonist._last_episode_starts = np.array(self.protagonist.env.get_attr("_last_episode_starts"), dtype=bool)
 
             callback_protagonist[-1].policy = self.adversary.policy
             self.protagonist = self.protagonist.learn(total_timesteps_protagonist*self.protagonist.n_steps*self.protagonist.env.num_envs, 
@@ -307,13 +320,18 @@ class RARL(BaseAlgorithm):
                                                     reset_num_timesteps=reset_num_timesteps,
                                                     **kwargs
                                                     )
-            
+
             if iteration_i >= adv_delay:
                 # perform adversary rollout and training
                 if self.verbose > 0:
                     print("train adversary...")
 
-                self.adversary.num_timesteps = max(self.adversary.num_timesteps, self.protagonist.num_timesteps - self.protagonist.n_steps*self.protagonist.env.num_envs)
+                #self.adversary.num_timesteps = max(self.adversary.num_timesteps, self.protagonist.num_timesteps - self.protagonist.n_steps*self.protagonist.env.num_envs)  #edited
+                
+                # sync environment with adversary
+                self.adversary.rollout_buffer = self.protagonist.rollout_buffer
+                self.adversary._last_obs = np.array(self.adversary.env.get_attr("_last_obs"), dtype=np.float32)
+                self.adversary._last_episode_starts = np.array(self.adversary.env.get_attr("_last_episode_starts"), dtype=bool)
 
                 callback_adversary[-1].policy = self.protagonist.policy
                 self.adversary = self.adversary.learn(total_timesteps_adversary*self.adversary.n_steps*self.adversary.env.num_envs, 
@@ -327,7 +345,7 @@ class RARL(BaseAlgorithm):
                                                         reset_num_timesteps=False,
                                                         **kwargs
                                                         )
-            
+
             if iteration_i % 100 == 0: 
                 print(f"Iteration:", iteration_i, "/", total_timesteps)
 
