@@ -68,6 +68,7 @@ class RARL(BaseAlgorithm):
                                     )
 
         self.syn_timesteps = syn_timesteps
+        self.device = device
 
         # define protagonist
         if protagonist_kwargs is None: 
@@ -89,7 +90,7 @@ class RARL(BaseAlgorithm):
         if "n_steps_protagonist" in self.protagonist_kwargs: 
             n_steps_protagonist = self.protagonist_kwargs["n_steps_protagonist"]
 
-        self.protagonist = TRPO(policy=self.protagonist_policy, env=env, n_steps=n_steps_protagonist, policy_kwargs=self.protagonist_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, create_eval_env=create_eval_env, seed=seed, **self.protagonist_kwargs)
+        self.protagonist = TRPO(policy=self.protagonist_policy, env=env, n_steps=n_steps_protagonist, policy_kwargs=self.protagonist_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, create_eval_env=create_eval_env, seed=seed, device=self.device, **self.protagonist_kwargs)
 
         # define adversary
         if adversary_kwargs is None: 
@@ -116,7 +117,7 @@ class RARL(BaseAlgorithm):
         else: 
             adv_env = AdversaryRewardWrapper(env)
 
-        self.adversary = TRPO(policy=self.adversary_policy, env=adv_env, n_steps=n_steps_adversary, policy_kwargs=self.adversary_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, create_eval_env=create_eval_env, seed=seed, **self.adversary_kwargs)
+        self.adversary = TRPO(policy=self.adversary_policy, env=adv_env, n_steps=n_steps_adversary, policy_kwargs=self.adversary_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, create_eval_env=create_eval_env, seed=seed, device=self.device, **self.adversary_kwargs)
 
         
     def _setup_model(self) -> None:
