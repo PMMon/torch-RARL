@@ -1,4 +1,3 @@
-from gc import callbacks
 import os, sys
 import argparse
 import yaml
@@ -100,6 +99,7 @@ class ExperimentManager(object):
         adv_force_dim: int = 2,
         total_steps_protagonist: int = 10, 
         total_steps_adversary: int = 10,
+        device: str = None
     ) -> None:
         super(ExperimentManager, self).__init__()
         self.args = args
@@ -136,6 +136,7 @@ class ExperimentManager(object):
         # training
         self.n_timesteps = n_timesteps
         self.save_freq = save_freq
+        self.device = device
 
         # evaluation
         self.n_eval_episodes = n_eval_episodes
@@ -169,20 +170,18 @@ class ExperimentManager(object):
 
         # logging
         self.verbose = verbose
-        self.log_folder = log_folder
-        self.log_path = os.path.join(log_folder, self.algo)
         self.tensorboard_log = None if tensorboard_log == "" else os.path.join(tensorboard_log, env_id)
         self.log_interval = log_interval
 
         # paths
         self.model_path = model_path
         if pretrained_model == "":
-            self.save_path = os.path.join(self.model_path, f"{get_latest_run_id(self.model_path, self.env_id) + 1}")
+            self.save_path = os.path.join(self.model_path, f"{self.env_id}_{get_latest_run_id(self.model_path, self.env_id) + 1}")
             self.continue_training = False
         else: 
             self.save_path = os.path.join(self.model_path, pretrained_model)
             self.continue_training = True
-        self.params_path = os.path.join(self.save_path, "params")
+        self.params_path = os.path.join(self.save_path, self.env_id)
 
         # RARL
         self.adv_delay = adv_delay
@@ -346,6 +345,10 @@ class ExperimentManager(object):
             self.specified_callbacks = hyperparams["callback"]
             del hyperparams["callback"]
 
+        # manage devide
+        if "device" in hyperparams.keys():
+            self.device = hyperparams["device"]
+
         return hyperparams, env_wrapper, callbacks
     
 
@@ -435,7 +438,7 @@ class ExperimentManager(object):
                 callback_on_new_best=save_vec_normalize,
                 best_model_save_path=self.save_path,
                 n_eval_episodes=self.n_eval_episodes,
-                log_path=self.log_path,
+                log_path=self.save_path,
                 eval_freq=self.eval_freq,
                 deterministic=self.deterministic_eval,
             )
@@ -468,9 +471,13 @@ class ExperimentManager(object):
             if self.adv_impact.lower() == "control":
                 self.env_wrapper = AdversarialClassicControlWrapper
                 wrapper_kwargs.update(dict(adv_fraction=self.adv_fraction))
+                if self.device:
+                    wrapper_kwargs.update(dict(device=self.device))
             elif self.adv_impact.lower() == "force": 
                 self.env_wrapper = AdversarialMujocoWrapper
                 wrapper_kwargs.update(dict(adv_low=self.adv_low, adv_high=self.adv_high, index_list=self.adv_index_list, force_dim=self.adv_force_dim))
+                if self.device:
+                    wrapper_kwargs.update(dict(device=self.device))
         else: 
             wrapper_kwargs = {}
 
