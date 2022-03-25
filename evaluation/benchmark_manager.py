@@ -7,17 +7,19 @@ import yaml
 import gym
 import numpy as np
 import torch
+from progressbar import progressbar
+from progress.bar import Bar 
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecEnv, VecFrameStack, VecNormalize
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.utils import set_random_seed
-from stable_baselines3.common.results_plotter import load_results, ts2xy
-
+from utils.wrappers import AdversarialClassicControlWrapper, AdversarialMujocoWrapper, ObsNoiseWrapper
 
 from models.algorithms import ALGOS
 from utils.utils import get_saved_hyperparams, StoreDict, get_wrapper_class
+
 
 class BenchmarkManager(object):
     """
@@ -52,6 +54,7 @@ class BenchmarkManager(object):
         verbose: int = 0,
         n_seeds: int = 1,
         num_threads: int = 1,
+        device: str = "cpu"
         ):
         self.n_timesteps = n_timesteps
 
@@ -59,6 +62,7 @@ class BenchmarkManager(object):
         self.verbose = verbose
         self.n_seeds = n_seeds
         self.num_threads = num_threads
+        self.device = device
         
         # logging results
         self.log_dir = log_dir
@@ -75,6 +79,8 @@ class BenchmarkManager(object):
         assert len(model_ids) >= 1, f"Length of model-ids must be > 0. Currently it is: {model_ids}"
         if model_range:
             assert len(model_ids) <= 2, f"If model-range set to True, length of model-ids must be 1 <= model_ids <= 2."
+            if len(model_ids) == 1: 
+                model_ids.append(model_ids[0])
             self.model_ids = np.arange(model_ids[0], model_ids[1]+1)
         else: 
             self.model_ids = model_ids
@@ -150,7 +156,6 @@ class BenchmarkManager(object):
             results.update(dict(oc_specifier=[], oc_value=[]))
 
         overall_rewards = []
-        overall_lengths = []
 
         # iterate over models
         for model_id in self.model_ids:
@@ -161,53 +166,65 @@ class BenchmarkManager(object):
             lengths = []
 
             # iterate over seeds 
-            for seed in range(1, self.n_seeds+1):
-                set_random_seed(seed)
-                if self.verbose >= 0: 
-                    print(f"Seed: {seed}")
+            with Bar("Seed", max=(self.n_seeds)) as bar:
+                for seed in range(1, self.n_seeds+1):
+                    set_random_seed(seed)
 
-                # set number of threads 
-                if args.num_threads > 0: 
-                    if args.verbose == 1: 
-                        print(f"Setting torch.num_threads to {self.num_threads}")
-                    torch.set_num_threads(self.num_threads)
+                    # set number of threads 
+                    if args.num_threads > 0: 
+                        if args.verbose == 1: 
+                            print(f"Setting torch.num_threads to {self.num_threads}")
+                        torch.set_num_threads(self.num_threads)
 
-                # get environment
-                env = self.create_eval_envs(seed, model_id)
-                # get model 
-                trained_model_path = self.get_trained_model_path(model_id)
+                    # get environment
+                    env = self.create_eval_envs(seed, model_id)
+                    # get model 
+                    trained_model_path = self.get_trained_model_path(model_id)
 
-                model = ALGOS[self.algo].load(trained_model_path, env=env, custom_objects=self.custom_objects, seed=seed)
+                    model_kwargs = {}
 
-                # evaluate
-                episode_rewards, episode_lengths = self.evaluate(self.n_timesteps, model, env)
+                    if self.algo == "rarl" and self.load_best: 
+                        model_kwargs.update(dict(protagonist_path="../best_model"))
 
-                rewards.append(episode_rewards)
-                lengths.append(episode_lengths)
+                    model = ALGOS[self.algo].load(trained_model_path, env=env, custom_objects=self.custom_objects, seed=seed, device=self.device, **model_kwargs)
 
-            # note results for model  
-            results["algo"].append(f"{self.algo}_{model_id}")
-            results["env_id"].append(self.env_id)
-            results["mean_reward"].append(np.mean(rewards))
-            results["std_reward"].append(np.std(rewards))
-            results["n_timesteps"].append(self.n_training_timesteps)
-            results["eval_timesteps"].append(np.cumsum(episode_lengths)[-1])
-            results["eval_episodes"].append(len(episode_rewards))
-            results["n_seeds"].append(self.n_seeds)
-            results["with_obs_noise"].append(self.with_obs_noise)
-            results["with_adv_impact"].append(self.with_adv_impact)
-            results["with_var_oc"].append(self.with_var_oc)
+                    # eval env wrapper
+                    # ToDo: if self.with_adv_impact: (wrapper)
+                    # ToDo: if self.with_var_oc: (callback)
+                    if self.with_obs_noise: 
+                        env = ObsNoiseWrapper(env)
 
-            if self.with_var_oc:
-                results["oc_specifier"].append(self.oc_specifier)
-                results["oc_value"].append(self.oc_value)
+                    # evaluate
+                    episode_rewards, episode_lengths = self.evaluate(self.n_timesteps, model, env)
 
-            overall_rewards.append(rewards)
+                    rewards.append(episode_rewards)
+                    lengths.append(episode_lengths)
 
-            if args.verbose >= 1:
+                    bar.next()
+
+                # note results for model  
+                results["algo"].append(f"{self.algo}_{model_id}")
+                results["env_id"].append(self.env_id)
+                results["mean_reward"].append(np.mean(rewards))
+                results["std_reward"].append(np.std(rewards))
+                results["n_timesteps"].append(self.n_training_timesteps)
+                results["eval_timesteps"].append(np.cumsum(episode_lengths)[-1])
+                results["eval_episodes"].append(len(episode_rewards))
+                results["n_seeds"].append(self.n_seeds)
+                results["with_obs_noise"].append(self.with_obs_noise)
+                results["with_adv_impact"].append(self.with_adv_impact)
+                results["with_var_oc"].append(self.with_var_oc)
+
+                if self.with_var_oc:
+                    results["oc_specifier"].append(self.oc_specifier)
+                    results["oc_value"].append(self.oc_value)
+
+                overall_rewards.append(rewards)
+
+                print("\n")
                 print(results["eval_timesteps"][-1], "timesteps")
                 print(results["eval_episodes"][-1], "Episodes")
-                print(f"Mean reward: {np.mean(rewards):.2f} +- {np.std(rewards):.2f}")
+                print(f"Mean reward over all {self.n_seeds} seeds: {np.mean(rewards):.2f} +- {np.std(rewards):.2f}")
 
         # create final statistics 
         results["algo"].append(f"{self.algo}_avg")
@@ -235,8 +252,18 @@ class BenchmarkManager(object):
         if self.filename != "":
             self.filename += "_"
 
-        results_df.to_csv(os.path.join(self.log_dir, f"{self.filename}{self.algo}_benchmark.csv") ,sep="," , index=False)
+        if self.with_obs_noise: 
+            self.filename += "noise_"
+
+        self.filename += f"{self.algo}_benchmark"
+
+        if self.load_best: 
+            self.filename += "_bestmodel"
+        self.filename += ".csv"
+
+        results_df.to_csv(os.path.join(self.log_dir, self.filename) ,sep="," , index=False)
         print(f'Saved results to {os.path.join(self.log_dir, f"{self.filename}{self.algo}_benchmark.csv")}')
+
 
     def get_trained_model_path(self, model_id: int) -> str:
         """
@@ -254,23 +281,27 @@ class BenchmarkManager(object):
         found = False
 
         if self.load_best:
-            model_path = os.path.join(trained_model_dir, "best_model.zip")
-            found = os.path.isfile(model_path)
+            if self.algo == "rarl": 
+                model_path = os.path.join(trained_model_dir, f"{self.env_id}")
+                found = os.path.isfile(os.path.join(trained_model_dir, "best_model.zip"))
+            else:
+                model_path = os.path.join(trained_model_dir, "best_model.zip")
+                found = os.path.isfile(model_path)
         elif self.load_checkpoint is not None:
             model_path = os.path.join(trained_model_dir, f"rl_model_{self.load_checkpoint}_steps.zip")
             found = os.path.isfile(model_path)
         else:
             if self.algo == "rarl": 
                 model_path = os.path.join(trained_model_dir, f"{self.env_id}")
+                found = os.path.isfile(os.path.join(model_path, "protagonist.zip"))
             else: 
                 model_path = os.path.join(trained_model_dir, f"{self.env_id}.zip")
-            found = os.path.isfile(model_path)
+                found = os.path.isfile(model_path)
 
         if not found:
             raise ValueError(f"No model found for {self.algo} on {self.env_id}, path: {model_path}")
 
         return model_path
-
 
 
     def create_eval_envs(self, seed: int, model_id: int) -> VecEnv:
@@ -319,16 +350,32 @@ class BenchmarkManager(object):
         if "env_wrapper" in hyperparams.keys():
             del hyperparams["env_wrapper"]
 
+
+        # if adversarial environment, adapt action space by wrapping into adversarial wrapper
+        if self.algo == "rarl" or self.with_adv_impact:
+            wrapper_kwargs = {}
+            #if not self.env_wrapper:
+            if self.verbose > 0:
+                print("Using adversarial environment wrapper...")
+            if loaded_args["adv_impact"] == "control":
+                env_wrapper = AdversarialClassicControlWrapper
+                wrapper_kwargs.update(dict(adv_fraction=loaded_args["adv_fraction"]))
+                if self.device:
+                    wrapper_kwargs.update(dict(device=self.device))
+            elif loaded_args["adv_impact"] == "force": 
+                env_wrapper = AdversarialMujocoWrapper
+                wrapper_kwargs.update(dict(adv_low=loaded_args["adv_low"], adv_high=loaded_args["adv_high"], index_list=loaded_args["adv_index_list"], force_dim=loaded_args["adv_force_dim"]))
+                if self.device:
+                    wrapper_kwargs.update(dict(device=self.device))
+        else: 
+            wrapper_kwargs = {}
+
+
         vec_env_kwargs = {}
         vec_env_cls = DummyVecEnv
         if self.n_envs > 1 or (self.is_bullet and self.render):
             # force SubprocVecEnv for Bullet env as Pybullet envs does not follow gym.render() interface
             vec_env_cls = SubprocVecEnv
-
-        # define eval env wrapper
-        # ToDo: if self.with_obs_noise: (wrapper)
-        # ToDo: if self.with_adv_impact: (wrapper)
-        # ToDo: if self.with_var_oc: (callback)
 
         env = make_vec_env(
             self.env_id,
@@ -339,13 +386,15 @@ class BenchmarkManager(object):
             env_kwargs=env_kwargs,
             vec_env_cls=vec_env_cls,
             vec_env_kwargs=vec_env_kwargs,
+            wrapper_kwargs=wrapper_kwargs
         )
 
         # load saved stats for normalizing input and rewards
         if stats_path is not None:
             if hyperparams["normalize"]:
-                print("Loading running average")
-                print(f"with params: {hyperparams['normalize_kwargs']}")
+                if self.verbose > 0:
+                    print("Loading running average")
+                    print(f"with params: {hyperparams['normalize_kwargs']}")
                 path_ = os.path.join(stats_path, "vecnormalize.pkl")
                 if os.path.exists(path_):
                     env = VecNormalize.load(path_, env)
@@ -359,14 +408,22 @@ class BenchmarkManager(object):
             if n_stack > 0:
                 print(f"Stacking {n_stack} frames")
                 env = VecFrameStack(env, n_stack)
-        
+
         # training timesteps formating
-        if "n_timesteps" in hyperparams.keys():
+        if self.algo == "rarl": 
+            self.n_training_timesteps = hyperparams["n_timesteps"] * hyperparams["n_steps_protagonist"] * hyperparams["total_steps_protagonist"]
+            if self.n_training_timesteps < 1e6:
+                self.n_training_timesteps = f"{int(self.n_training_timesteps / 1e3)}k"
+            else:
+                self.n_training_timesteps = f"{int(self.n_training_timesteps / 1e6)}M"
+        elif "n_timesteps" in hyperparams.keys():
             if hyperparams["n_timesteps"] < 1e6:
                 self.n_training_timesteps = f"{int(hyperparams['n_timesteps'] / 1e3)}k"
             else:
                 self.n_training_timesteps = f"{int(hyperparams['n_timesteps'] / 1e6)}M"
-        
+        else: 
+            raise ValueError("No parameter 'n_timesteps' in hyperparameters!")
+
         return env
 
 
@@ -464,6 +521,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-threads", type=int, default=1, help="Number of threads")
     parser.add_argument("--with-mujoco",  default=False, action="store_true", help="Benchmark on MuJoCo environment")
     parser.add_argument("--render", default=False, action="store_true", help="Render the environment")
+    parser.add_argument('--device', type=str, default="cpu", help="Specify device")
 
     # Configs about models
     parser.add_argument('--algo', type=str, default="ppo", choices=list(ALGOS.keys()), help="Algorithm to be evaluated")
