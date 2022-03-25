@@ -74,7 +74,6 @@ class RARL(BaseAlgorithm):
         if protagonist_kwargs is None: 
             protagonist_kwargs = dict(
                                      batch_size= 128,
-                                     n_steps= 128,
                                      gamma= 0.999,
                                      learning_rate= 0.007807660745967545,
                                      n_critic_updates= 5,
@@ -95,7 +94,6 @@ class RARL(BaseAlgorithm):
         # define adversary
         if adversary_kwargs is None: 
             adversary_kwargs = dict(batch_size= 128,
-                                     n_steps= 128,
                                      gamma= 0.999,
                                      learning_rate= 0.007807660745967545,
                                      n_critic_updates= 5,
@@ -502,6 +500,8 @@ class RARL(BaseAlgorithm):
         custom_objects: Optional[Dict[str, Any]] = None,
         print_system_info: bool = False,
         force_reset: bool = True,
+        protagonist_path: str = "protagonist",
+        adversary_path: str = "adversary",
         **kwargs,
     ) -> "BaseAlgorithm":
         """
@@ -557,9 +557,15 @@ class RARL(BaseAlgorithm):
                 f"Stored kwargs: {data['adversary_policy_kwargs']}, specified kwargs: {kwargs['adversary_policy_kwargs']}"
             )
 
+        # wrap environment for modified reward function
+        if isinstance(env, VecEnv):
+            adv_env = AdversaryRewardVecEnvWrapper(env)
+        else: 
+            adv_env = AdversaryRewardWrapper(env)
+
         # load submodels
-        protagonist = TRPO.load(os.path.join(path, "protagonist"), env=env, print_system_info=False)
-        adversary = TRPO.load(os.path.join(path, "adversary"), env=env, print_system_info=False)
+        protagonist = TRPO.load(os.path.join(path, protagonist_path), env=env, print_system_info=False, device=device, custom_objects=custom_objects, force_reset=force_reset)
+        adversary = TRPO.load(os.path.join(path, adversary_path), env=adv_env, print_system_info=False, device=device, custom_objects=custom_objects, force_reset=force_reset)
 
         # noinspection PyArgumentList
         model = cls(  # pytype: disable=not-instantiable,wrong-keyword-args
@@ -570,7 +576,7 @@ class RARL(BaseAlgorithm):
             )
 
         # load parameters
-        model.__dict__.update(dict(protagonist=protagonist, adversary =adversary))         
+        model.__dict__.update(dict(protagonist=protagonist, adversary=adversary))         
         model.__dict__.update(data)
         model.__dict__.update(kwargs)
 
@@ -590,9 +596,6 @@ class RARL(BaseAlgorithm):
                 # Set the data attribute directly to avoid issue when using optimizers
                 # See https://github.com/DLR-RM/stable-baselines3/issues/391
                 recursive_setattr(model, name + ".data", pytorch_variables[name].data)
-
-        for key, item in model.__dict__.items():
-            print(key, item)
 
         return model
 
