@@ -306,7 +306,7 @@ class ExperimentManager(object):
         
         # rarl - overwrite number of timesteps of protagonist and adversary
         if self.algo == "rarl":
-            if self.n_timesteps > 0:
+            if self.total_steps_protagonist > 0 and self.total_steps_adversary > 0:
                 if self.verbose > 0:
                     print(f"Overwriting total_steps_protagonist with n_mu={self.total_steps_protagonist}")
                     print(f"Overwriting total_steps_adversary with n_nu={self.total_steps_adversary}")
@@ -475,7 +475,7 @@ class ExperimentManager(object):
                     wrapper_kwargs.update(dict(device=self.device))
             elif self.adv_impact.lower() == "force": 
                 self.env_wrapper = AdversarialMujocoWrapper
-                wrapper_kwargs.update(dict(adv_low=self.adv_low, adv_high=self.adv_high, index_list=self.adv_index_list, force_dim=self.adv_force_dim))
+                wrapper_kwargs.update(dict(adv_fraction=self.adv_fraction, index_list=self.adv_index_list, force_dim=self.adv_force_dim))
                 if self.device:
                     wrapper_kwargs.update(dict(device=self.device))
         else: 

@@ -131,12 +131,48 @@ class AdversarialWrapper(gym.Wrapper):
             raise NotImplementedError
 
 
+class NegativeRewardWrapper(gym.RewardWrapper):
+    """
+    Negates the reward function
+    """
+    def __init__(self, env):
+        super().__init__(env=env)
+
+
+    def reward(self, rew):
+        # modify rew
+        return -rew
+
+
+class NegativeRewardVecEnvWrapper(VecEnvWrapper):
+    """
+    Negates the reward function for vector environments
+    """
+    def __init__(self, venv: VecEnv):
+        super().__init__(venv=venv)
+
+
+    def step_wait(self) -> VecEnvStepReturn:
+        obs, reward, done, info = self.venv.step_wait()
+        return obs, self.reward(reward), done, info
+    
+    def step_async(self, actions: np.ndarray) -> None:
+        self.venv.step_async(actions)
+
+    def reset(self) -> np.ndarray:
+        return self.venv.reset()
+    
+    def reward(self, rew):
+        # modify rew
+        return -rew
+
+
 class AdversaryRewardWrapper(gym.RewardWrapper):
     """
     Adapts the reward function of the adversary in RARL
     """
     def __init__(self, env):
-        self.action_space(env.adv_action_space)
+        self.action_space(env.__getattribute__("adv_action_space"))
         super().__init__(env=env)
 
 
@@ -312,10 +348,11 @@ class AdversarialMujocoWrapper(gym.Wrapper):
     The wrapper replaces the customized environments defined in: 
     Lerrel Pinto: "Gym environments with adversarial disturbance agents" <https://github.com/lerrel/gym-adv>.
     """
-    def __init__(self, env: Env, adv_low: float = -1.0, adv_high: float = 1.0, index_list: List[str] = [], force_dim: int = 2, device: str = "auto"):
+    def __init__(self, env: Env, adv_fraction: float = 1.0, adv_low: float = 1.0, adv_high: float = 1.0, index_list: List[str] = [], force_dim: int = 2, device: str = "auto"):
         super(AdversarialMujocoWrapper, self).__init__(env)
         self.env = env
         self.force_dim = force_dim
+        self.adv_fraction = adv_fraction
 
         # define point of attack
         self._adv_force_bname = index_list
@@ -327,7 +364,8 @@ class AdversarialMujocoWrapper(gym.Wrapper):
             raise AttributeError("Environment: %s does not include all body names in list: %s\n Please use body names available from here: %s" % (env.spec.id, index_list, bnames))
         
         adv_action_space_dim = force_dim*len(self._adv_body_indicees)
-        self._adv_action_space = spaces.Box(np.ones(adv_action_space_dim, dtype=np.float32) * adv_low, np.ones(adv_action_space_dim, dtype=np.float32) * adv_high)
+        # ToDo: Normalize action space and multiply by fraction in step to enable "superpowers"
+        self._adv_action_space = spaces.Box(-1 * np.ones(adv_action_space_dim, dtype=np.float32), np.ones(adv_action_space_dim, dtype=np.float32))
         self._action_space = env.action_space
         self._initial_action_space = env.action_space
         self._observation_space = env.observation_space
@@ -349,17 +387,17 @@ class AdversarialMujocoWrapper(gym.Wrapper):
         # apply forces at contact points
         for i, bindex in enumerate(self._adv_body_indicees):
             if self.force_dim == 1: 
-                new_xfrc[bindex] = np.array([adv_act[i], 0., 0., 0., 0., 0.])
+                new_xfrc[bindex] = self.adv_fraction * np.array([adv_act[i], 0., 0., 0., 0., 0.])
             elif self.force_dim == 2: 
-                new_xfrc[bindex] = np.array([adv_act[i*2], 0., adv_act[i*2+1], 0., 0., 0.])
+                new_xfrc[bindex] = self.adv_fraction * np.array([adv_act[i*2], 0., adv_act[i*2+1], 0., 0., 0.])
             elif self.force_dim == 3: 
-                new_xfrc[bindex] = np.array([adv_act[i*3], adv_act[i*3+1], adv_act[i*3+2], 0., 0., 0.])
+                new_xfrc[bindex] = self.adv_fraction * np.array([adv_act[i*3], adv_act[i*3+1], adv_act[i*3+2], 0., 0., 0.])
             elif self.force_dim == 4: 
-                new_xfrc[bindex] = np.array([adv_act[i*4], adv_act[i*4+1], adv_act[i*4+2], adv_act[i*4+3], 0., 0.])
+                new_xfrc[bindex] = self.adv_fraction * np.array([adv_act[i*4], adv_act[i*4+1], adv_act[i*4+2], adv_act[i*4+3], 0., 0.])
             elif self.force_dim == 5: 
-                new_xfrc[bindex] = np.array([adv_act[i*5], adv_act[i*5+1], adv_act[i*5+2], adv_act[i*5+3], 0., adv_act[i*5+4]])
+                new_xfrc[bindex] = self.adv_fraction * np.array([adv_act[i*5], adv_act[i*5+1], adv_act[i*5+2], adv_act[i*5+3], 0., adv_act[i*5+4]])
             elif self.force_dim == 6: 
-                new_xfrc[bindex] = np.array([adv_act[i*6], adv_act[i*6+1], adv_act[i*6+2], adv_act[i*6+3], adv_act[i*6+4], adv_act[i*6+5]])
+                new_xfrc[bindex] = self.adv_fraction * np.array([adv_act[i*6], adv_act[i*6+1], adv_act[i*6+2], adv_act[i*6+3], adv_act[i*6+4], adv_act[i*6+5]])
             else: 
                 raise ValueError(f"Force dimension must be within [1, 6], not: ", self.force_dim)
 
@@ -478,3 +516,26 @@ class AdversarialMujocoWrapper(gym.Wrapper):
     def render(self):
         self.env.render()
 
+
+class ObsNoiseWrapper(gym.ObservationWrapper):
+    """
+    Adding Gaussian noise to observations.
+    """
+    def __init__(self, env: Env, mu: float = 0, std: float = 1):
+        super(ObsNoiseWrapper, self).__init__(env)
+        self.env = env
+        self.mu = mu
+        self.std = std
+
+    def observation(self, observation):
+        """Apply noise to observation signal
+
+        Args:
+            observations (array): observation signal
+
+        Returns:
+            array: observation signal with Gaussian noise
+        """
+        for obs in observation:
+            obs += np.random.normal(self.mu, self.std)
+        return observation
