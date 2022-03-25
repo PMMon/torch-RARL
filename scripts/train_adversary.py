@@ -76,8 +76,8 @@ if __name__ == "__main__":
     parser.add_argument('--protagonist_policy', type=str, default="MlpPolicy", help='Policy of protagonist')
     parser.add_argument('--adversary_policy', type=str, default="MlpPolicy", help='Policy of adversary')
 
-    parser.add_argument('--total_steps_protagonist', type=int, default=10, help='Number of steps to run for each environment per protagonist update')
-    parser.add_argument('--total_steps_adversary', type=int, default=10, help='Number of steps to run for each environment per adversary update')
+    parser.add_argument('--total_steps_protagonist', type=int, default=-1, help='Number of steps to run for each environment per protagonist update')
+    parser.add_argument('--total_steps_adversary', type=int, default=-1, help='Number of steps to run for each environment per adversary update')
 
     # Configs for adversarial environment
     parser.add_argument('--adv_impact', type=str, default="control", choices=["control", "force"], help='Define how adversary impacts agent')
