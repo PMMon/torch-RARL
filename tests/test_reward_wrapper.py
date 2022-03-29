@@ -1,6 +1,7 @@
 import os, sys
 import argparse
 import gym 
+import numpy as np 
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 
@@ -107,7 +108,6 @@ def test_negative_reward(algo, render=False, device="cpu", train_steps=20000, se
     assert mean_score_after_training <= mean_score, "Mean after training bigger than before training!"
 
     print("Test successfull.")
-
 
 if __name__ == "__main__": 
     # Parse arguments
