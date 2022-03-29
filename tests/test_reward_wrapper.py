@@ -1,7 +1,6 @@
 import os, sys
 import argparse
 import gym 
-import numpy as np 
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 
@@ -9,7 +8,6 @@ from stable_baselines3.common.vec_env import VecEnv
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.utils import safe_mean, set_random_seed
 from stable_baselines3.common.base_class import maybe_make_env
-
 
 from utils.wrappers import NegativeRewardWrapper, NegativeRewardVecEnvWrapper
 from models.algorithms import ALGOS
@@ -20,6 +18,16 @@ from models.algorithms import ALGOS
 # =====================
 
 def test_negative_reward(algo, render=False, device="cpu", train_steps=20000, seed=2, vec_env = False):
+    """Test environment wrapper for negation of reward
+
+    Args:
+        algo (str): algorithm name
+        render (bool, optional): whether of not to render environment. Defaults to False.
+        device (str, optional): device. Defaults to "cpu".
+        train_steps (int, optional): number of training steps. Defaults to 20000.
+        seed (int, optional): seed. Defaults to 2.
+        vec_env (bool, optional): whether or not to wrap environment with vector class. Defaults to False.
+    """
     set_random_seed(seed)
     print("Testing negative reward wrapper...")
     # use Cartpole-v1 environment as it comes with only positive rewards (+1 for every step taken)
@@ -108,6 +116,7 @@ def test_negative_reward(algo, render=False, device="cpu", train_steps=20000, se
     assert mean_score_after_training <= mean_score, "Mean after training bigger than before training!"
 
     print("Test successfull.")
+
 
 if __name__ == "__main__": 
     # Parse arguments
