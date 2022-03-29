@@ -1,4 +1,3 @@
-from gc import callbacks
 import os, sys
 import argparse
 import yaml
@@ -12,7 +11,6 @@ from collections import OrderedDict
 from pprint import pprint
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import torch
-import copy
 
 from optuna.samplers import BaseSampler, RandomSampler, TPESampler
 from optuna.integration.skopt import SkoptSampler
@@ -32,7 +30,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.
 from utils.hyperparams_opt import HYPERPARAMS_SAMPLER
 from utils.utils import get_latest_run_id, linear_schedule, get_wrapper_class, get_callback_list
 from utils.callbacks import SaveVecNormalizeCallback, TrialEvalCallback, SetupProTrainingCallback, SetupAdvTrainingCallback
-from utils.wrappers import AdversarialClassicControlWrapper
+from utils.wrappers import AdversarialClassicControlWrapper, AdversarialMujocoWrapper
 from models.algorithms import ALGOS
 
 
@@ -92,10 +90,16 @@ class ExperimentManager(object):
         n_eval_envs: int = 1,
         no_optim_plots: bool = False,
         adv_env: bool = False,
+        adv_impact: str = "",
         adv_fraction: float = 1.0,
         adv_delay: int = -1,
+        adv_low: float = -1.0, 
+        adv_high: float = 1.0,
+        adv_index_list: List = None,
+        adv_force_dim: int = 2,
         total_steps_protagonist: int = 10, 
         total_steps_adversary: int = 10,
+        device: str = None
     ) -> None:
         super(ExperimentManager, self).__init__()
         self.args = args
@@ -123,10 +127,16 @@ class ExperimentManager(object):
 
         # adversarial env
         self.adv_fraction = adv_fraction
+        self.adv_impact = adv_impact
+        self.adv_low = adv_low
+        self.adv_high = adv_high
+        self.adv_index_list = adv_index_list
+        self.adv_force_dim = adv_force_dim
 
         # training
         self.n_timesteps = n_timesteps
         self.save_freq = save_freq
+        self.device = device
 
         # evaluation
         self.n_eval_episodes = n_eval_episodes
@@ -160,20 +170,18 @@ class ExperimentManager(object):
 
         # logging
         self.verbose = verbose
-        self.log_folder = log_folder
-        self.log_path = os.path.join(log_folder, self.algo)
         self.tensorboard_log = None if tensorboard_log == "" else os.path.join(tensorboard_log, env_id)
         self.log_interval = log_interval
 
         # paths
         self.model_path = model_path
         if pretrained_model == "":
-            self.save_path = os.path.join(self.model_path, f"{get_latest_run_id(self.model_path, self.env_id) + 1}")
+            self.save_path = os.path.join(self.model_path, f"{self.env_id}_{get_latest_run_id(self.model_path, self.env_id) + 1}")
             self.continue_training = False
         else: 
             self.save_path = os.path.join(self.model_path, pretrained_model)
             self.continue_training = True
-        self.params_path = os.path.join(self.save_path, "params")
+        self.params_path = os.path.join(self.save_path, self.env_id)
 
         # RARL
         self.adv_delay = adv_delay
@@ -295,6 +303,16 @@ class ExperimentManager(object):
                 print(f"Overwriting n_timesteps with n={self.n_timesteps}")
         else:
             self.n_timesteps = int(hyperparams["n_timesteps"])
+        
+        # rarl - overwrite number of timesteps of protagonist and adversary
+        if self.algo == "rarl":
+            if self.total_steps_protagonist > 0 and self.total_steps_adversary > 0:
+                if self.verbose > 0:
+                    print(f"Overwriting total_steps_protagonist with n_mu={self.total_steps_protagonist}")
+                    print(f"Overwriting total_steps_adversary with n_nu={self.total_steps_adversary}")
+            else:
+                self.total_steps_protagonist = int(hyperparams["total_steps_protagonist"])
+                self.total_steps_adversary = int(hyperparams["total_steps_adversary"])
 
         # pre-process normalization config
         hyperparams = self._preprocess_normalization(hyperparams)
@@ -309,6 +327,10 @@ class ExperimentManager(object):
             del hyperparams["n_envs"]
         del hyperparams["n_timesteps"]
 
+        if self.algo == "rarl":
+            del hyperparams["total_steps_protagonist"]
+            del hyperparams["total_steps_adversary"]
+
         if "frame_stack" in hyperparams.keys():
             self.frame_stack = hyperparams["frame_stack"]
             del hyperparams["frame_stack"]
@@ -322,6 +344,10 @@ class ExperimentManager(object):
         if "callback" in hyperparams.keys():
             self.specified_callbacks = hyperparams["callback"]
             del hyperparams["callback"]
+
+        # manage devide
+        if "device" in hyperparams.keys():
+            self.device = hyperparams["device"]
 
         return hyperparams, env_wrapper, callbacks
     
@@ -412,7 +438,7 @@ class ExperimentManager(object):
                 callback_on_new_best=save_vec_normalize,
                 best_model_save_path=self.save_path,
                 n_eval_episodes=self.n_eval_episodes,
-                log_path=self.log_path,
+                log_path=self.save_path,
                 eval_freq=self.eval_freq,
                 deterministic=self.deterministic_eval,
             )
@@ -442,8 +468,16 @@ class ExperimentManager(object):
             #if not self.env_wrapper:
             if self.verbose > 0:
                 print("Using adversarial environment wrapper...")
-            self.env_wrapper = AdversarialClassicControlWrapper
-            wrapper_kwargs.update(dict(adv_fraction=self.adv_fraction))
+            if self.adv_impact.lower() == "control":
+                self.env_wrapper = AdversarialClassicControlWrapper
+                wrapper_kwargs.update(dict(adv_fraction=self.adv_fraction))
+                if self.device:
+                    wrapper_kwargs.update(dict(device=self.device))
+            elif self.adv_impact.lower() == "force": 
+                self.env_wrapper = AdversarialMujocoWrapper
+                wrapper_kwargs.update(dict(adv_fraction=self.adv_fraction, index_list=self.adv_index_list, force_dim=self.adv_force_dim))
+                if self.device:
+                    wrapper_kwargs.update(dict(device=self.device))
         else: 
             wrapper_kwargs = {}
 
@@ -593,14 +627,8 @@ class ExperimentManager(object):
         if self.log_interval > -1:
             kwargs = {"log_interval": self.log_interval}
 
-        if False: 
-            self.callbacks.append(
-                SetupProTrainingCallback(policy=model.policy, #copy.deepcopy(model.policy),
-                                         verbose=self.verbose)
-            )
-
         if len(self.callbacks) > 0:
-            kwargs["callback"] = [] #self.callbacks
+            kwargs["callback"] = self.callbacks
 
             if self.algo == "rarl": 
                 kwargs["callback_protagonist"] = self.callbacks

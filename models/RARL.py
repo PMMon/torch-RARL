@@ -16,9 +16,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback
 from stable_baselines3.common.vec_env import VecEnv
 from stable_baselines3.common.save_util import load_from_zip_file, recursive_setattr, recursive_getattr, save_to_zip_file
-from stable_baselines3.common.utils import (
-    get_system_info,
-)
+from stable_baselines3.common.utils import get_system_info
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 
@@ -39,8 +37,6 @@ class RARL(BaseAlgorithm):
         protagonist_policy: Union[str, Type[ActorCriticPolicy]],
         adversary_policy: Union[str, Type[ActorCriticPolicy]],
         env: Union[GymEnv, str],
-        protag_layers: List,
-        adversary_layers: List,
         n_steps_protagonist: int = 1024,
         n_steps_adversary: int = 1024,
         protagonist_kwargs: Optional[Dict[str, Any]] = None, 
@@ -55,6 +51,7 @@ class RARL(BaseAlgorithm):
         support_multi_env: bool = True,
         tensorboard_log: Optional[str] = None,
         device: Union[torch.device, str] = "auto",
+        syn_timesteps: bool = False,
         ):
         super(RARL, self).__init__(policy=None, 
                                     env=env,
@@ -70,11 +67,13 @@ class RARL(BaseAlgorithm):
                                     supported_action_spaces=supported_action_spaces                                     
                                     )
 
+        self.syn_timesteps = syn_timesteps
+        self.device = device
+
         # define protagonist
         if protagonist_kwargs is None: 
             protagonist_kwargs = dict(
                                      batch_size= 128,
-                                     n_steps= 128,
                                      gamma= 0.999,
                                      learning_rate= 0.007807660745967545,
                                      n_critic_updates= 5,
@@ -86,17 +85,15 @@ class RARL(BaseAlgorithm):
         self.protagonist_policy = protagonist_policy
         self.protagonist_kwargs = protagonist_kwargs
         self.protagonist_policy_kwargs = {} if protagonist_policy_kwargs is None else protagonist_policy_kwargs
-        self.protagonist_policy_kwargs.update(dict(net_arch=[dict(pi=[64, 64], vf=[64, 64])], activation_fn=torch.nn.ReLU))
 
         if "n_steps_protagonist" in self.protagonist_kwargs: 
             n_steps_protagonist = self.protagonist_kwargs["n_steps_protagonist"]
 
-        self.protagonist = TRPO(policy=protagonist_policy, env=env, n_steps=n_steps_protagonist, policy_kwargs=self.protagonist_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, create_eval_env=create_eval_env, **self.protagonist_kwargs)
+        self.protagonist = TRPO(policy=self.protagonist_policy, env=env, n_steps=n_steps_protagonist, policy_kwargs=self.protagonist_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, create_eval_env=create_eval_env, seed=seed, device=self.device, **self.protagonist_kwargs)
 
         # define adversary
         if adversary_kwargs is None: 
             adversary_kwargs = dict(batch_size= 128,
-                                     n_steps= 128,
                                      gamma= 0.999,
                                      learning_rate= 0.007807660745967545,
                                      n_critic_updates= 5,
@@ -108,7 +105,6 @@ class RARL(BaseAlgorithm):
         self.adversary_policy = adversary_policy
         self.adversary_kwargs = adversary_kwargs
         self.adversary_policy_kwargs = {} if adversary_policy_kwargs is None else adversary_policy_kwargs
-        self.adversary_policy_kwargs.update(dict(net_arch=[dict(pi=[64, 64], vf=[64, 64])], activation_fn=torch.nn.ReLU))
 
         if "n_steps_adversary" in self.adversary_kwargs: 
             n_steps_adversary = self.adversary_kwargs["n_steps_adversary"]
@@ -119,9 +115,9 @@ class RARL(BaseAlgorithm):
         else: 
             adv_env = AdversaryRewardWrapper(env)
 
-        self.adversary = TRPO(policy=adversary_policy, env=adv_env, n_steps=n_steps_adversary, policy_kwargs=self.adversary_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, create_eval_env=create_eval_env, **self.adversary_kwargs)
-        
+        self.adversary = TRPO(policy=self.adversary_policy, env=adv_env, n_steps=n_steps_adversary, policy_kwargs=self.adversary_policy_kwargs, verbose=self.verbose, tensorboard_log=tensorboard_log, create_eval_env=create_eval_env, seed=seed, device=self.device, **self.adversary_kwargs)
 
+        
     def _setup_model(self) -> None:
         """Create networks, buffer and optimizers."""
         print("Protagonist and Adversary will be set up when learning starts")
@@ -279,21 +275,30 @@ class RARL(BaseAlgorithm):
         # protagonist and adversary callbacks
         if not callback_protagonist: 
             callback_protagonist = []
-        callback_protagonist.append(SetupProTrainingCallback(policy=self.adversary.policy, #copy.deepcopy(model.policy),
+        callback_protagonist.append(SetupProTrainingCallback(policy=self.adversary.policy,
                                                              verbose=self.verbose))
         if not callback_adversary:
             callback_adversary = []
-        callback_adversary.append(SetupAdvTrainingCallback(policy=self.protagonist.policy, #copy.deepcopy(model.policy),
+        callback_adversary.append(SetupAdvTrainingCallback(policy=self.protagonist.policy,
                                                            verbose=self.verbose))
 
         while iteration_i < total_timesteps:
             if iteration_i > 0:
                 reset_num_timesteps = False
-                self.protagonist.num_timesteps = max(self.protagonist.num_timesteps, self.adversary.num_timesteps - self.adversary.n_steps*self.adversary.env.num_envs)
+
+                if self.syn_timesteps:
+                    self.protagonist.num_timesteps = max(self.protagonist.num_timesteps, self.adversary.num_timesteps - self.adversary.n_steps*self.adversary.env.num_envs)
 
             # perform protagonist rollout and training
             if self.verbose > 0:
                 print("train protagonist...")
+            
+
+            # sync environment with protagonist
+            if not reset_num_timesteps:
+                #self.protagonist.rollout_buffer = self.adversary.rollout_buffer
+                self.protagonist._last_obs = np.array(self.protagonist.env.get_attr("_last_obs"), dtype=np.float32)
+                self.protagonist._last_episode_starts = np.array(self.protagonist.env.get_attr("_last_episode_starts"), dtype=bool)
 
             callback_protagonist[-1].policy = self.adversary.policy
             self.protagonist = self.protagonist.learn(total_timesteps_protagonist*self.protagonist.n_steps*self.protagonist.env.num_envs, 
@@ -307,13 +312,19 @@ class RARL(BaseAlgorithm):
                                                     reset_num_timesteps=reset_num_timesteps,
                                                     **kwargs
                                                     )
-            
+
             if iteration_i >= adv_delay:
                 # perform adversary rollout and training
                 if self.verbose > 0:
                     print("train adversary...")
 
-                self.adversary.num_timesteps = max(self.adversary.num_timesteps, self.protagonist.num_timesteps - self.protagonist.n_steps*self.protagonist.env.num_envs)
+                if self.syn_timesteps:
+                    self.adversary.num_timesteps = max(self.adversary.num_timesteps, self.protagonist.num_timesteps - self.protagonist.n_steps*self.protagonist.env.num_envs)
+                
+                # sync environment with adversary
+                # self.adversary.rollout_buffer = self.protagonist.rollout_buffer
+                self.adversary._last_obs = np.array(self.adversary.env.get_attr("_last_obs"), dtype=np.float32)
+                self.adversary._last_episode_starts = np.array(self.adversary.env.get_attr("_last_episode_starts"), dtype=bool)
 
                 callback_adversary[-1].policy = self.protagonist.policy
                 self.adversary = self.adversary.learn(total_timesteps_adversary*self.adversary.n_steps*self.adversary.env.num_envs, 
@@ -327,7 +338,7 @@ class RARL(BaseAlgorithm):
                                                         reset_num_timesteps=False,
                                                         **kwargs
                                                         )
-            
+
             if iteration_i % 100 == 0: 
                 print(f"Iteration:", iteration_i, "/", total_timesteps)
 
@@ -396,6 +407,7 @@ class RARL(BaseAlgorithm):
             "_logger",
             "_custom_logger",
         ]
+
 
     def _get_torch_save_params(self) -> Tuple[List[str], List[str]]:
         """
@@ -488,6 +500,8 @@ class RARL(BaseAlgorithm):
         custom_objects: Optional[Dict[str, Any]] = None,
         print_system_info: bool = False,
         force_reset: bool = True,
+        protagonist_path: str = "protagonist",
+        adversary_path: str = "adversary",
         **kwargs,
     ) -> "BaseAlgorithm":
         """
@@ -543,22 +557,26 @@ class RARL(BaseAlgorithm):
                 f"Stored kwargs: {data['adversary_policy_kwargs']}, specified kwargs: {kwargs['adversary_policy_kwargs']}"
             )
 
+        # wrap environment for modified reward function
+        if isinstance(env, VecEnv):
+            adv_env = AdversaryRewardVecEnvWrapper(env)
+        else: 
+            adv_env = AdversaryRewardWrapper(env)
+
         # load submodels
-        protagonist = TRPO.load(os.path.join(path, "protagonist"), env=env, print_system_info=False)
-        adversary = TRPO.load(os.path.join(path, "adversary"), env=env, print_system_info=False)
+        protagonist = TRPO.load(os.path.join(path, protagonist_path), env=env, print_system_info=False, device=device, custom_objects=custom_objects, force_reset=force_reset)
+        adversary = TRPO.load(os.path.join(path, adversary_path), env=adv_env, print_system_info=False, device=device, custom_objects=custom_objects, force_reset=force_reset)
 
         # noinspection PyArgumentList
         model = cls(  # pytype: disable=not-instantiable,wrong-keyword-args
                 protagonist_policy = data["protagonist_policy"],
                 adversary_policy = data["adversary_policy"],
                 env = env,
-                protag_layers = protagonist.policy.net_arch,
-                adversary_layers = adversary.policy.net_arch,
                 device=device,  # pytype: disable=not-instantiable,wrong-keyword-args
             )
 
         # load parameters
-        model.__dict__.update(dict(protagonist=protagonist, adversary =adversary))         
+        model.__dict__.update(dict(protagonist=protagonist, adversary=adversary))         
         model.__dict__.update(data)
         model.__dict__.update(kwargs)
 
@@ -579,10 +597,6 @@ class RARL(BaseAlgorithm):
                 # See https://github.com/DLR-RM/stable-baselines3/issues/391
                 recursive_setattr(model, name + ".data", pytorch_variables[name].data)
 
-
-        for key, item in model.__dict__.items():
-            print(key, item)
-
         return model
 
 
@@ -600,8 +614,6 @@ if __name__ == "__main__":
     # Configs for RARL
     parser.add_argument('--protagonist_policy', type=str, default="MlpPolicy", help='Policy of protagonist')
     parser.add_argument('--adversary_policy', type=str, default="MlpPolicy", help='Policy of adversary')
-    parser.add_argument('--protag_layers', nargs='+', type=int, default=[100, 100, 100], help='Layer specification for actor')
-    parser.add_argument('--adversary_layers', nargs='+', type=int, default=[100, 100, 100], help='Layer specification for critic')
 
     parser.add_argument('--n_iter', type=int, default=50, help='Number of iterations of alternating optimization')
     parser.add_argument('--n_steps_protagonist', type=int, default=5000, help='Number of steps to run for each environment per protagonist update')
@@ -613,7 +625,6 @@ if __name__ == "__main__":
     # Configs for learning
     parser.add_argument('--eval_freq', type=int, default=500, help='Frequency of evaluation')
 
-
     args = parser.parse_args()
 
     # Define model
@@ -621,7 +632,7 @@ if __name__ == "__main__":
     env = AdversarialClassicControlWrapper(env=env, adv_fraction=args.adv_fraction)
 
     # Test model
-    rarl_model = RARL(protagonist_policy=args.protagonist_policy, adversary_policy=args.adversary_policy, env=env, protag_layers=args.protag_layers, adversary_layers=args.adversary_layers, tensorboard_log="tb_log", verbose=args.verbose, seed=args.seed)
+    rarl_model = RARL(protagonist_policy=args.protagonist_policy, adversary_policy=args.adversary_policy, env=env, tensorboard_log="tb_log", verbose=args.verbose, seed=args.seed)
     rarl_model.learn(args.n_iter, total_timesteps_protagonist=args.n_steps_protagonist, total_timesteps_adversary=args.n_steps_adversary, adv_delay=args.adv_delay, eval_freq=args.eval_freq, eval_log_path="tb_log")
     
     # Save model
