@@ -1,10 +1,10 @@
 LunarLanderContinuous-v2:
   n_envs: 16
-  n_timesteps: !!float 1e6
+  n_timesteps: !!float 50
+  total_steps_protagonist: !!float 10
+  total_steps_adversary: !!float 10
   protagonist_policy: "MlpPolicy"
   adversary_policy: "MlpPolicy"
-  protag_layers: [100, 100, 100]
-  adversary_layers: [100, 100, 100]
   n_steps_protagonist: 128
   n_steps_adversary: 128
   protagonist_kwargs: "dict(batch_size=128,
@@ -29,3 +29,50 @@ LunarLanderContinuous-v2:
   adversary_policy_kwargs: "dict(activation_fn=torch.nn.ReLU,
                               net_arch=[dict(pi=[64, 64], vf=[64, 64])]
                               )"
+
+
+HalfCheetah-v3:
+  normalize: true
+  n_envs: 1
+  device: cuda:1
+  n_timesteps: !!float 500
+  total_steps_protagonist: !!float 1
+  total_steps_adversary: !!float 1
+  protagonist_policy: "MlpPolicy"
+  adversary_policy: "MlpPolicy"
+  n_steps_protagonist: 2048
+  n_steps_adversary: 2048
+  protagonist_kwargs: "dict(batch_size=128,
+                            gamma=0.99,
+                            learning_rate=1.9904955094948545e-05,
+                            n_critic_updates=25,
+                            cg_max_steps=30,
+                            target_kl=0.01,
+                            gae_lambda=0.95
+                            )"
+  protagonist_policy_kwargs: "dict(
+                              activation_fn=torch.nn.ReLU,
+                              net_arch=[dict(pi=[64, 64], vf=[64, 64])]
+                            )"
+
+  adversary_kwargs: "dict(batch_size=128,
+                            gamma=0.99,
+                            learning_rate=1.9904955094948545e-05,
+                            n_critic_updates=25,
+                            cg_max_steps=30,
+                            target_kl=0.01,
+                            gae_lambda=0.95
+                            )"
+  adversary_policy_kwargs: "dict(
+                            activation_fn=torch.nn.ReLU,
+                            net_arch=[dict(pi=[64, 64], vf=[64, 64])]
+                          )"
+
+
+# specified by paper
+# n_envs: 1
+# n_timesteps: !!float 500 (100 for Inverted Pendulum)
+# adversary_policy_kwargs: "dict(
+#                            activation_fn=torch.nn.ReLU,
+#                            net_arch=[64. 64]
+#                          )"
