@@ -109,6 +109,7 @@ def test_negative_reward(algo, render=False, device="cpu", train_steps=20000, se
 
     print("Test successfull.")
 
+
 if __name__ == "__main__": 
     # Parse arguments
     parser = argparse.ArgumentParser("Test reward wrapper")
