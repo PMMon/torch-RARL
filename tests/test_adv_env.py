@@ -21,7 +21,7 @@ from utils.policies import ConstantPolicy
 # ===============================
 
 def test_adv_force_qualitatively(seed: int = None, render: bool = False, force: List = [0., 0.], index_list: List = ["torso"]):
-    """Analyze qualitatively whether force on agent is applied correctly
+    """Test qualitatively whether force on agent is applied correctly
 
     Args:
         seed (int, optional): seed. Defaults to None.
@@ -40,7 +40,9 @@ def test_adv_force_qualitatively(seed: int = None, render: bool = False, force: 
     wrapper_kwargs = {}
 
     # define arguments for wrapper - apply 2D force on torso
-    wrapper_kwargs.update(dict(adv_fraction=100., index_list=index_list, force_dim=2))
+    adv_fraction = max(force)
+
+    wrapper_kwargs.update(dict(adv_fraction=adv_fraction, index_list=index_list, force_dim=2))
 
     # build environment
     env = make_vec_env(
@@ -54,14 +56,14 @@ def test_adv_force_qualitatively(seed: int = None, render: bool = False, force: 
 
     # define protagonist and adversary - specify protagonist to do nothing
     response_vector_protagonist = torch.tensor([[0., 0., 0., 0., 0., 0.]])
-    pro_policy_action_space = spaces.Box(torch.min(response_vector_protagonist).item() * np.ones(env.action_space.shape, dtype=np.float32), torch.max(response_vector_protagonist).item() * np.ones(env.action_space.shape, dtype=np.float32))
+    pro_policy_action_space = spaces.Box(torch.min(response_vector_protagonist).item() * np.ones(response_vector_protagonist.shape, dtype=np.float32), torch.max(response_vector_protagonist).item() * np.ones(response_vector_protagonist.shape, dtype=np.float32))
     protagonist_policy = ConstantPolicy(action_space=pro_policy_action_space, observation_space=env.observation_space, respone_vector=response_vector_protagonist)
 
     # adversary
     assert len(force) == 2*len(index_list), "2-dim force for each contact point in index-list has to be specified!"
 
-    response_vector_adversary = torch.tensor([force])
-    print(f"force tensor: {response_vector_adversary}")
+    response_vector_adversary = torch.tensor([force]) / adv_fraction
+    print(f"force tensor: {torch.tensor([force])}")
     adv_policy_action_space = spaces.Box(torch.min(response_vector_adversary).item() * np.ones(response_vector_adversary.shape, dtype=np.float32), torch.max(response_vector_adversary).item() * np.ones(response_vector_adversary.shape, dtype=np.float32))
     adversary_policy = ConstantPolicy(action_space=adv_policy_action_space, observation_space=env.observation_space, respone_vector=response_vector_adversary)
 
@@ -97,6 +99,7 @@ def test_adv_force_qualitatively(seed: int = None, render: bool = False, force: 
     env.close()
 
     print(f"Number of episodes: ", episodes)
+    print("Test finished. Please analyze video produced.")
 
 
 def test_adv_force(seed: int = None, render: bool = False):
@@ -120,7 +123,8 @@ def test_adv_force(seed: int = None, render: bool = False):
     wrapper_kwargs = {}
 
     # define arguments for wrapper - apply 2D force on torso
-    wrapper_kwargs.update(dict(adv_fraction=100., index_list=index_list, force_dim=2))
+    adv_fraction = 100.
+    wrapper_kwargs.update(dict(adv_fraction=adv_fraction, index_list=index_list, force_dim=2))
 
     # build environment
     env = make_vec_env(
@@ -143,8 +147,8 @@ def test_adv_force(seed: int = None, render: bool = False):
     force = [100., 0., 0., 0., 0., 0.]
     assert len(force) == 2*len(index_list), "2-dim force for each contact point in index-list has to be specified!"
 
-    response_vector_adversary = torch.tensor([force])
-    print(f"force tensor: {response_vector_adversary}")
+    response_vector_adversary = torch.tensor([force]) / adv_fraction
+    print(f"force tensor: {torch.tensor([force])}")
     adv_policy_action_space = spaces.Box(torch.min(response_vector_adversary).item() * np.ones(response_vector_adversary.shape, dtype=np.float32), torch.max(response_vector_adversary).item() * np.ones(response_vector_adversary.shape, dtype=np.float32))
     adversary_policy = ConstantPolicy(action_space=adv_policy_action_space, observation_space=env.observation_space, respone_vector=response_vector_adversary)
 
@@ -188,8 +192,8 @@ def test_adv_force(seed: int = None, render: bool = False):
     force = [0., 0., 0., 100., 0., 100.]
     assert len(force) == 2*len(index_list), "2-dim force for each contact point in index-list has to be specified!"
 
-    response_vector_adversary = torch.tensor([force])
-    print(f"force tensor: {response_vector_adversary}")
+    response_vector_adversary = torch.tensor([force]) / adv_fraction
+    print(f"force tensor: {torch.tensor([force])}")
     adv_policy_action_space = spaces.Box(torch.min(response_vector_adversary).item() * np.ones(response_vector_adversary.shape, dtype=np.float32), torch.max(response_vector_adversary).item() * np.ones(response_vector_adversary.shape, dtype=np.float32))
     adversary_policy = ConstantPolicy(action_space=adv_policy_action_space, observation_space=env.observation_space, respone_vector=response_vector_adversary)
 
