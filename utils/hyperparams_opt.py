@@ -11,7 +11,7 @@ from utils.utils import linear_schedule
 
 # =========================================================================
 #   Specifications for hyperparameter optimization. 
-#   Taken from RL Baselines3 Zoo
+#   Taken from RL Baselines3 Zoo and modified to enable RARL hyperparam opt.
 #   <https://github.com/DLR-RM/rl-baselines3-zoo/blob/master/utils/hyperparams_opt.py>
 # ==========================================================================
 
