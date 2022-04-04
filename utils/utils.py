@@ -34,6 +34,23 @@ def linear_schedule(initial_value: Union[float, str]) -> Callable[[float], float
     Linear learning rate schedule.
     :param initial_value: (float or str)
     :return: (function)
+
+    Taken from RL Baselines3 Zoo 
+    <https://github.com/DLR-RM/rl-baselines3-zoo/blob/master/utils/utils.py>
+
+    MIT License
+
+    Copyright (c) 2019 Antonin RAFFIN
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
     """
     if isinstance(initial_value, str):
         initial_value = float(initial_value)

@@ -11,7 +11,7 @@ from utils.utils import linear_schedule
 
 # =========================================================================
 #   Specifications for hyperparameter optimization. 
-#   Taken from RL Baselines3 Zoo
+#   Taken from RL Baselines3 Zoo and modified to enable RARL hyperparam opt.
 #   <https://github.com/DLR-RM/rl-baselines3-zoo/blob/master/utils/hyperparams_opt.py>
 # ==========================================================================
 
@@ -477,6 +477,100 @@ def sample_qrdqn_params(trial: optuna.Trial) -> Dict[str, Any]:
     return hyperparams
 
 
+def sample_rarl_params(trial: optuna.Trial) -> Dict[str, Any]:
+    """
+    Sampler for RARL hyperparams.
+    :param trial:
+    :return:
+    """
+
+    gamma_pro = trial.suggest_categorical("gamma_pro", [0.9, 0.95, 0.98, 0.99, 0.995, 0.999, 0.9999])
+    gamma_adv = trial.suggest_categorical("gamma_adv", [0.9, 0.95, 0.98, 0.99, 0.995, 0.999, 0.9999])
+    learning_rate_pro = trial.suggest_loguniform("learning_rate_pro", 1e-5, 1)
+    learning_rate_adv = trial.suggest_loguniform("learning_rate_adv", 1e-5, 1)
+    lr_schedule = "constant"
+    # Uncomment to enable learning rate schedule
+    # lr_schedule = trial.suggest_categorical('lr_schedule', ['linear', 'constant'])
+    # line_search_shrinking_factor = trial.suggest_categorical("line_search_shrinking_factor", [0.6, 0.7, 0.8, 0.9])
+    n_critic_updates_pro = trial.suggest_categorical("n_critic_updates_pro", [5, 10, 20, 25, 30])
+    n_critic_updates_adv = trial.suggest_categorical("n_critic_updates_adv", [5, 10, 20, 25, 30])
+    cg_max_steps_pro = trial.suggest_categorical("cg_max_steps_pro", [5, 10, 20, 25, 30])
+    cg_max_steps_adv = trial.suggest_categorical("cg_max_steps_adv", [5, 10, 20, 25, 30])
+    # cg_damping = trial.suggest_categorical("cg_damping", [0.5, 0.2, 0.1, 0.05, 0.01])
+    target_kl_pro = trial.suggest_categorical("target_kl_pro", [0.1, 0.05, 0.03, 0.02, 0.01, 0.005, 0.001])
+    target_kl_adv = trial.suggest_categorical("target_kl_adv", [0.1, 0.05, 0.03, 0.02, 0.01, 0.005, 0.001])
+    gae_lambda_pro = trial.suggest_categorical("gae_lambda_pro", [0.8, 0.9, 0.92, 0.95, 0.98, 0.99, 1.0])
+    gae_lambda_adv = trial.suggest_categorical("gae_lambda_adv", [0.8, 0.9, 0.92, 0.95, 0.98, 0.99, 1.0])
+    net_arch_pro = trial.suggest_categorical("net_arch_pro", ["small", "medium"])
+    net_arch_adv = trial.suggest_categorical("net_arch_adv", ["small", "medium"])
+    # Uncomment for gSDE (continuous actions)
+    # log_std_init = trial.suggest_uniform("log_std_init", -4, 1)
+    # Uncomment for gSDE (continuous action)
+    # sde_sample_freq = trial.suggest_categorical("sde_sample_freq", [-1, 8, 16, 32, 64, 128, 256])
+    # Orthogonal initialization
+    # ortho_init = False
+    # ortho_init = trial.suggest_categorical('ortho_init', [False, True])
+    # activation_fn = trial.suggest_categorical('activation_fn', ['tanh', 'relu', 'elu', 'leaky_relu'])
+    activation_fn_pro = trial.suggest_categorical("activation_fn_pro", ["tanh", "relu"])
+    activation_fn_adv = trial.suggest_categorical("activation_fn_adv", ["tanh", "relu"])
+    batch_size_pro = trial.suggest_categorical("batch_size_pro", [8, 16, 32, 64, 128, 256, 512])
+    batch_size_adv = trial.suggest_categorical("batch_size_adv", [8, 16, 32, 64, 128, 256, 512])
+    N_mu = trial.suggest_categorical("N_mu", [1, 5, 10, 20, 50])
+    N_nu = trial.suggest_categorical("N_nu", [1, 5, 10, 20, 50])
+    n_steps_protagonist = trial.suggest_categorical("n_steps_protagonist", [8, 16, 32, 64, 128, 256, 512, 1024, 2048])
+    n_steps_adversary = trial.suggest_categorical("n_steps_adversary", [8, 16, 32, 64, 128, 256, 512, 1024, 2048])
+    adv_fraction = trial.suggest_categorical("adv_fraction", [0.1, 0.5, 1., 2.5, 5.])
+
+    if n_steps_adversary > 2*n_steps_protagonist: 
+        n_steps_adversary = 2*n_steps_protagonist
+    
+    if N_mu != 1 and N_nu > 2*N_mu: 
+        N_nu = 2*N_mu
+        
+    # Independent networks usually work best
+    # when not working with images
+    net_arch_pro = {
+        "small": [dict(pi=[64, 64], vf=[64, 64])],
+        "medium": [dict(pi=[256, 256], vf=[256, 256])],
+    }[net_arch_pro]
+    
+    net_arch_adv = {
+        "small": [dict(pi=[64, 64], vf=[64, 64])],
+        "medium": [dict(pi=[256, 256], vf=[256, 256])],
+    }[net_arch_adv]
+
+    activation_fn_pro = {"tanh": nn.Tanh, "relu": nn.ReLU, "elu": nn.ELU, "leaky_relu": nn.LeakyReLU}[activation_fn_pro]
+    activation_fn_adv = {"tanh": nn.Tanh, "relu": nn.ReLU, "elu": nn.ELU, "leaky_relu": nn.LeakyReLU}[activation_fn_adv]
+
+    # TODO: account when using multiple envs
+    if batch_size_pro > n_steps_protagonist:
+        batch_size_pro = n_steps_protagonist
+    
+    if batch_size_adv > n_steps_adversary:
+        batch_size_adv = n_steps_adversary
+
+    if lr_schedule == "linear":
+        learning_rate_pro = linear_schedule(learning_rate_pro)
+        learning_rate_adv = linear_schedule(learning_rate_adv)
+
+    protagonist_kwargs = dict(batch_size=batch_size_pro, gamma=gamma_pro, learning_rate=learning_rate_pro, n_critic_updates=n_critic_updates_pro, cg_max_steps=cg_max_steps_pro, target_kl=target_kl_pro, gae_lambda=gae_lambda_pro)
+    protagonist_policy_kwargs = dict(activation_fn=activation_fn_pro, net_arch=net_arch_pro)
+
+    adversary_kwargs = dict(batch_size=batch_size_adv, gamma=gamma_adv, learning_rate=learning_rate_adv, n_critic_updates=n_critic_updates_adv, cg_max_steps=cg_max_steps_adv, target_kl=target_kl_adv, gae_lambda=gae_lambda_adv)
+    adversary_policy_kwargs = dict(activation_fn=activation_fn_adv, net_arch=net_arch_adv)
+
+    return {
+        "adv_fraction": adv_fraction,
+        "N_mu": N_mu,
+        "N_nu": N_nu,
+        "n_steps_protagonist": n_steps_protagonist, 
+        "n_steps_adversary": n_steps_adversary,
+        "protagonist_kwargs": protagonist_kwargs,
+        "adversary_kwargs": adversary_kwargs, 
+        "protagonist_policy_kwargs": protagonist_policy_kwargs, 
+        "adversary_policy_kwargs": adversary_policy_kwargs
+    }
+
 HYPERPARAMS_SAMPLER = {
     "a2c": sample_a2c_params,
     "ddpg": sample_ddpg_params,
@@ -487,4 +581,5 @@ HYPERPARAMS_SAMPLER = {
     "ppo": sample_ppo_params,
     "td3": sample_td3_params,
     "trpo": sample_trpo_params,
+    "rarl": sample_rarl_params
 }

@@ -1,3 +1,4 @@
+# taken from https://github.com/DLR-RM/rl-baselines3-zoo/blob/master/hyperparams/ppo.yml
 atari:
   env_wrapper:
     - stable_baselines3.common.atari_wrappers.AtariWrapper

@@ -1,13 +1,12 @@
 import os, sys
 import argparse
 import pandas as pd
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Dict, List
 import difflib
 import yaml
 import gym
 import numpy as np
 import torch
-from progressbar import progressbar
 from progress.bar import Bar 
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
@@ -19,6 +18,10 @@ from utils.wrappers import AdversarialClassicControlWrapper, AdversarialMujocoWr
 
 from models.algorithms import ALGOS
 from utils.utils import get_saved_hyperparams, StoreDict, get_wrapper_class
+
+# =====================================
+#   Evaluate and benchmark RL agents
+# =====================================
 
 
 class BenchmarkManager(object):
@@ -411,7 +414,7 @@ class BenchmarkManager(object):
 
         # training timesteps formating
         if self.algo == "rarl": 
-            self.n_training_timesteps = hyperparams["n_timesteps"] * hyperparams["n_steps_protagonist"] * hyperparams["total_steps_protagonist"]
+            self.n_training_timesteps = hyperparams["n_timesteps"] * hyperparams["n_steps_protagonist"] * hyperparams["N_mu"]
             if self.n_training_timesteps < 1e6:
                 self.n_training_timesteps = f"{int(self.n_training_timesteps / 1e3)}k"
             else:
@@ -465,8 +468,8 @@ class BenchmarkManager(object):
                 ep_len += 1
 
                 if self.n_envs == 1:
-                    # For atari the return reward is not the atari score
-                    # so we have to get it from the infos dict
+                    # For atari the return reward is not the atari score,
+                    # get it from the infos dict
                     if self.is_atari and infos is not None:
                         episode_infos = infos[0].get("episode")
                         if episode_infos is not None and self.verbose >= 1:
@@ -485,7 +488,6 @@ class BenchmarkManager(object):
                         ep_len = 0
                         state = None
 
-                    # Reset also when the goal is achieved when using HER
                     if done and infos[0].get("is_success") is not None:
                         if self.verbose >= 1:
                             print("Success?", infos[0].get("is_success", False))
@@ -535,7 +537,6 @@ if __name__ == "__main__":
     # Configs about logging
     parser.add_argument('--log-dir', type=str, default=os.path.join("logging", "benchmarking"), help="Path to benchmark logging")
     parser.add_argument('--filename', type=str, default="", help="Name of benchmarking file")
-
 
     # Configs about benchmarking
     parser.add_argument("-n", "--n-timesteps", type= int, default=15000, help="Number of timesteps")

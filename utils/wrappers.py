@@ -2,7 +2,7 @@ import gym
 from gym import Env, spaces
 import numpy as np
 import torch
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import List
 
 from stable_baselines3.common.utils import obs_as_tensor, get_device
 from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvWrapper, VecEnvStepReturn
@@ -317,10 +317,6 @@ class AdversarialClassicControlWrapper(gym.Wrapper):
         return self._last_obs
 
 
-    def render(self):
-        self.env.render()
-
-
     def convert_gym_space(self, space, low_val, high_val):
         """Converts gym space into appropriate categories
 
@@ -511,10 +507,6 @@ class AdversarialMujocoWrapper(gym.Wrapper):
     def reset(self):
         self._last_obs = self.env.reset()
         return self._last_obs
-
-
-    def render(self):
-        self.env.render()
 
 
 class ObsNoiseWrapper(gym.ObservationWrapper):

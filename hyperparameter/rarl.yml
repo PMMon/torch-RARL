@@ -1,8 +1,8 @@
 LunarLanderContinuous-v2:
   n_envs: 16
   n_timesteps: !!float 50
-  total_steps_protagonist: !!float 10
-  total_steps_adversary: !!float 10
+  N_mu: !!float 10
+  N_nu: !!float 10
   protagonist_policy: "MlpPolicy"
   adversary_policy: "MlpPolicy"
   n_steps_protagonist: 128
@@ -35,39 +35,76 @@ HalfCheetah-v3:
   normalize: true
   n_envs: 1
   device: cuda:1
-  n_timesteps: !!float 500
-  total_steps_protagonist: !!float 1
-  total_steps_adversary: !!float 1
+  n_timesteps: !!float 100
+  N_mu: !!float 5
+  N_nu: !!float 1
   protagonist_policy: "MlpPolicy"
   adversary_policy: "MlpPolicy"
   n_steps_protagonist: 2048
-  n_steps_adversary: 2048
+  n_steps_adversary: 128
+  adv_fraction: 2.5
   protagonist_kwargs: "dict(batch_size=128,
-                            gamma=0.99,
-                            learning_rate=1.9904955094948545e-05,
-                            n_critic_updates=25,
-                            cg_max_steps=30,
+                            gamma=0.95,
+                            learning_rate=1.3706859653339884e-05,
+                            n_critic_updates=30,
+                            cg_max_steps=25,
                             target_kl=0.01,
-                            gae_lambda=0.95
+                            gae_lambda=0.9
                             )"
   protagonist_policy_kwargs: "dict(
                               activation_fn=torch.nn.ReLU,
-                              net_arch=[dict(pi=[64, 64], vf=[64, 64])]
+                              net_arch=[dict(pi=[256, 256], vf=[256, 256])]
                             )"
 
-  adversary_kwargs: "dict(batch_size=128,
-                            gamma=0.99,
-                            learning_rate=1.9904955094948545e-05,
-                            n_critic_updates=25,
-                            cg_max_steps=30,
-                            target_kl=0.01,
-                            gae_lambda=0.95
+  adversary_kwargs: "dict(batch_size=512,
+                            gamma=0.999,
+                            learning_rate=0.02250803339759749,
+                            n_critic_updates=5,
+                            cg_max_steps=10,
+                            target_kl=0.02,
+                            gae_lambda=0.92
                             )"
   adversary_policy_kwargs: "dict(
                             activation_fn=torch.nn.ReLU,
                             net_arch=[dict(pi=[64, 64], vf=[64, 64])]
                           )"
 
+#  normalize: true
+#  n_envs: 1
+#  device: cuda:1
+#  n_timesteps: !!float 500
+#  N_mu: !!float 1
+#  N_nu: !!float 1
+#  protagonist_policy: "MlpPolicy"
+#  adversary_policy: "MlpPolicy"
+#  n_steps_protagonist: 2048
+#  n_steps_adversary: 2048
+#  adv_fraction: 1.0
+#  protagonist_kwargs: "dict(batch_size=128,
+#                            gamma=0.99,
+#                            learning_rate=1.9904955094948545e-05,
+#                            n_critic_updates=25,
+#                            cg_max_steps=30,
+#                            target_kl=0.01,
+#                            gae_lambda=0.95
+#                            )"
+#  protagonist_policy_kwargs: "dict(
+#                              activation_fn=torch.nn.ReLU,
+#                              net_arch=[dict(pi=[64, 64], vf=[64, 64])]
+#                            )"
+#
+#  adversary_kwargs: "dict(batch_size=128,
+#                            gamma=0.99,
+#                            learning_rate=1.9904955094948545e-05,
+#                            n_critic_updates=25,
+#                            cg_max_steps=30,
+#                            target_kl=0.01,
+#                            gae_lambda=0.95
+#                            )"
+#  adversary_policy_kwargs: "dict(
+#                            activation_fn=torch.nn.ReLU,
+#                            net_arch=[dict(pi=[64, 64], vf=[64, 64])]
+#                          )"
 
 # specified by paper
 # n_envs: 1

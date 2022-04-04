@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import matplotlib.ticker as ticker
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 
 # ==============================
@@ -85,13 +86,13 @@ class PlotEvaluation:
         # axis
         ax.set_ylabel(self.args.ylabel)
         ax.set_xlabel(self.args.xlabel)
-
         ax.xaxis.set_major_formatter(ticker.EngFormatter())
         ax.xaxis.set_ticks(np.arange(0, max(signal_dict[self.args.algos[0]]["x_value"]), 100000), minor=True)
 
         # legend 
         ax.legend(bbox_to_anchor=(1, 0.3))
 
+        # set size of figure
         fig.set_size_inches(width, height)
 
         # save plot
@@ -102,7 +103,6 @@ class PlotEvaluation:
 
         fig.tight_layout()
         fig.savefig(os.path.join(self.output_path, self.args.plotname), dpi=200)
-
         print("figure created.")
 
 
@@ -132,7 +132,6 @@ if __name__ == "__main__":
     # Configs for RL-algorithms
     parser.add_argument('--algos', nargs='+', type=str, default=["rarl"], help='Specfiy list of algorithms to plot')
     parser.add_argument('--legend', nargs='+', type=str, default=[], help='Specfiy face color for std values')
-
 
     # Get arguments
     args = parser.parse_args()
