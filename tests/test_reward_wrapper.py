@@ -128,7 +128,6 @@ if __name__ == "__main__":
     parser.add_argument("--render",  default=False, action="store_true", help="Render environment")
     parser.add_argument("--vec-env",  default=False, action="store_true", help="Use vectorized environment")
 
-
     # Script Behavior
     parser.add_argument("--test-negative-reward",  default=False, action="store_true", help="Test negative reward wrapper")
 
