@@ -538,7 +538,6 @@ if __name__ == "__main__":
     parser.add_argument('--log-dir', type=str, default=os.path.join("logging", "benchmarking"), help="Path to benchmark logging")
     parser.add_argument('--filename', type=str, default="", help="Name of benchmarking file")
 
-
     # Configs about benchmarking
     parser.add_argument("-n", "--n-timesteps", type= int, default=15000, help="Number of timesteps")
     parser.add_argument("--n-seeds", type=int, default=10, help="Number of seeds")
