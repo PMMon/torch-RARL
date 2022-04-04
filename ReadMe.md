@@ -31,7 +31,7 @@ python scripts/train_adversary.py --algo rarl --env env_id
 It is possible to specify the total number of iterations N<sub>iter</sub>, as well as the number of iterations for the protagonist N<sub>μ</sub> and adversary N<sub>ν</sub> using:
 
 ```
-python scripts/train_adversary.py --algo rarl --env env_id --n_timesteps N_iter --total_steps_protagonist Nμ --total_steps_adversary Nν
+python scripts/train_adversary.py --algo rarl --env env_id --n-timesteps N_iter --N-mu Nμ --N-nu Nν
 ```
 
 A detailed explanation of all possible command-line flags can be found [here](ReadMeFiles/ARGUMENTS.md).
