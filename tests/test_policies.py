@@ -32,7 +32,7 @@ def test_constant_policy(render=False, seed=None):
 
     response_vector = torch.tensor([[100., -30.]])
     policy_action_space = spaces.Box(torch.min(response_vector).item() * np.ones(env.action_space.shape, dtype=np.float32), torch.max(response_vector).item() * np.ones(env.action_space.shape, dtype=np.float32))
-    policy = ConstantPolicy(action_space=policy_action_space, observation_space=env.observation_space, respone_vector=response_vector)
+    policy = ConstantPolicy(action_space=policy_action_space, observation_space=env.observation_space, response_vector=response_vector)
     print(f"Response vector: {response_vector}")
     print("Sample from policy...")
     episodes = 5

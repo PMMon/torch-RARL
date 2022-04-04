@@ -20,6 +20,7 @@ from utils.policies import ConstantPolicy
 #  Test Adversarial Environment
 # ===============================
 
+
 def test_adv_force_qualitatively(seed: int = None, render: bool = False, force: List = [0., 0.], index_list: List = ["torso"]):
     """Test qualitatively whether force on agent is applied correctly
 
@@ -57,7 +58,7 @@ def test_adv_force_qualitatively(seed: int = None, render: bool = False, force: 
     # define protagonist and adversary - specify protagonist to do nothing
     response_vector_protagonist = torch.tensor([[0., 0., 0., 0., 0., 0.]])
     pro_policy_action_space = spaces.Box(torch.min(response_vector_protagonist).item() * np.ones(response_vector_protagonist.shape, dtype=np.float32), torch.max(response_vector_protagonist).item() * np.ones(response_vector_protagonist.shape, dtype=np.float32))
-    protagonist_policy = ConstantPolicy(action_space=pro_policy_action_space, observation_space=env.observation_space, respone_vector=response_vector_protagonist)
+    protagonist_policy = ConstantPolicy(action_space=pro_policy_action_space, observation_space=env.observation_space, response_vector=response_vector_protagonist)
 
     # adversary
     assert len(force) == 2*len(index_list), "2-dim force for each contact point in index-list has to be specified!"
@@ -65,7 +66,7 @@ def test_adv_force_qualitatively(seed: int = None, render: bool = False, force: 
     response_vector_adversary = torch.tensor([force]) / adv_fraction
     print(f"force tensor: {torch.tensor([force])}")
     adv_policy_action_space = spaces.Box(torch.min(response_vector_adversary).item() * np.ones(response_vector_adversary.shape, dtype=np.float32), torch.max(response_vector_adversary).item() * np.ones(response_vector_adversary.shape, dtype=np.float32))
-    adversary_policy = ConstantPolicy(action_space=adv_policy_action_space, observation_space=env.observation_space, respone_vector=response_vector_adversary)
+    adversary_policy = ConstantPolicy(action_space=adv_policy_action_space, observation_space=env.observation_space, response_vector=response_vector_adversary)
 
     # set environment to proper state
     env.set_attr("operating_mode", "protagonist")
@@ -139,7 +140,7 @@ def test_adv_force(seed: int = None, render: bool = False):
     # define protagonist and adversary - specify protagonist to do nothing
     response_vector_protagonist = torch.tensor([[0., 0., 0., 0., 0., 0.]])
     pro_policy_action_space = spaces.Box(torch.min(response_vector_protagonist).item() * np.ones(env.action_space.shape, dtype=np.float32), torch.max(response_vector_protagonist).item() * np.ones(env.action_space.shape, dtype=np.float32))
-    protagonist_policy = ConstantPolicy(action_space=pro_policy_action_space, observation_space=env.observation_space, respone_vector=response_vector_protagonist)
+    protagonist_policy = ConstantPolicy(action_space=pro_policy_action_space, observation_space=env.observation_space, response_vector=response_vector_protagonist)
 
     # adversary
     # 1) push torso of agent forward (torso, bfoot, ffoot)
@@ -150,7 +151,7 @@ def test_adv_force(seed: int = None, render: bool = False):
     response_vector_adversary = torch.tensor([force]) / adv_fraction
     print(f"force tensor: {torch.tensor([force])}")
     adv_policy_action_space = spaces.Box(torch.min(response_vector_adversary).item() * np.ones(response_vector_adversary.shape, dtype=np.float32), torch.max(response_vector_adversary).item() * np.ones(response_vector_adversary.shape, dtype=np.float32))
-    adversary_policy = ConstantPolicy(action_space=adv_policy_action_space, observation_space=env.observation_space, respone_vector=response_vector_adversary)
+    adversary_policy = ConstantPolicy(action_space=adv_policy_action_space, observation_space=env.observation_space, response_vector=response_vector_adversary)
 
     # set environment to proper state
     env.set_attr("operating_mode", "protagonist")
@@ -195,7 +196,7 @@ def test_adv_force(seed: int = None, render: bool = False):
     response_vector_adversary = torch.tensor([force]) / adv_fraction
     print(f"force tensor: {torch.tensor([force])}")
     adv_policy_action_space = spaces.Box(torch.min(response_vector_adversary).item() * np.ones(response_vector_adversary.shape, dtype=np.float32), torch.max(response_vector_adversary).item() * np.ones(response_vector_adversary.shape, dtype=np.float32))
-    adversary_policy = ConstantPolicy(action_space=adv_policy_action_space, observation_space=env.observation_space, respone_vector=response_vector_adversary)
+    adversary_policy = ConstantPolicy(action_space=adv_policy_action_space, observation_space=env.observation_space, response_vector=response_vector_adversary)
 
     # set environment to proper state
     env.set_attr("operating_mode", "protagonist")
@@ -239,7 +240,7 @@ def test_adv_force(seed: int = None, render: bool = False):
 
 if __name__ == "__main__": 
     # Parse arguments
-    parser = argparse.ArgumentParser("Test adversarial environments")
+    parser = argparse.ArgumentParser("Test adversarial environment")
 
     # General Configs 
     parser.add_argument('--seed', type=int, default=None, help="Specify seed")
