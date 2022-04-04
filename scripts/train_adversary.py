@@ -14,7 +14,8 @@ from utils.exp_manager import ExperimentManager
 from utils.utils import StoreDict
 
 # ===========================================================================================
-#   Training an RL agent on an environment specified. 
+#   Training an RL agent on an environment specified. Extends RL Baselines3 Zoo training 
+#   script for training the Robust Aversarial RL agent (RARL).
 #   To promote standardization, the script is as close to RL Baselines3 Zoo as possible.
 #   (https://github.com/DLR-RM/rl-baselines3-zoo/blob/master/train.py)   
 # ===========================================================================================
