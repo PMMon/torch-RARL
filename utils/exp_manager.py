@@ -93,12 +93,10 @@ class ExperimentManager(object):
         adv_impact: str = "",
         adv_fraction: float = 1.0,
         adv_delay: int = -1,
-        adv_low: float = -1.0, 
-        adv_high: float = 1.0,
         adv_index_list: List = None,
         adv_force_dim: int = 2,
-        total_steps_protagonist: int = 10, 
-        total_steps_adversary: int = 10,
+        N_mu: int = 10, 
+        N_nu: int = 10,
         device: str = None
     ) -> None:
         super(ExperimentManager, self).__init__()
@@ -128,8 +126,6 @@ class ExperimentManager(object):
         # adversarial env
         self.adv_fraction = adv_fraction
         self.adv_impact = adv_impact
-        self.adv_low = adv_low
-        self.adv_high = adv_high
         self.adv_index_list = adv_index_list
         self.adv_force_dim = adv_force_dim
 
@@ -185,8 +181,8 @@ class ExperimentManager(object):
 
         # RARL
         self.adv_delay = adv_delay
-        self.total_steps_protagonist = total_steps_protagonist
-        self.total_steps_adversary = total_steps_adversary
+        self.N_mu = N_mu
+        self.N_nu = N_nu
 
 
     def setup_experiment(self) -> Optional[BaseAlgorithm]:
@@ -306,13 +302,17 @@ class ExperimentManager(object):
         
         # rarl - overwrite number of timesteps of protagonist and adversary
         if self.algo == "rarl":
-            if self.total_steps_protagonist > 0 and self.total_steps_adversary > 0:
+            if self.N_mu > 0 and self.N_nu > 0:
                 if self.verbose > 0:
-                    print(f"Overwriting total_steps_protagonist with n_mu={self.total_steps_protagonist}")
-                    print(f"Overwriting total_steps_adversary with n_nu={self.total_steps_adversary}")
+                    print(f"Overwriting total_steps_protagonist with n_mu={self.N_mu}")
+                    print(f"Overwriting total_steps_adversary with n_nu={self.N_nu}")
             else:
-                self.total_steps_protagonist = int(hyperparams["total_steps_protagonist"])
-                self.total_steps_adversary = int(hyperparams["total_steps_adversary"])
+                self.N_mu = int(hyperparams["N_mu"])
+                self.N_nu = int(hyperparams["N_nu"])
+
+        if "adv_fraction" in hyperparams.keys(): 
+            self.adv_fraction = hyperparams["adv_fraction"]
+            del hyperparams["adv_fraction"]
 
         # pre-process normalization config
         hyperparams = self._preprocess_normalization(hyperparams)
@@ -328,8 +328,8 @@ class ExperimentManager(object):
         del hyperparams["n_timesteps"]
 
         if self.algo == "rarl":
-            del hyperparams["total_steps_protagonist"]
-            del hyperparams["total_steps_adversary"]
+            del hyperparams["N_mu"]
+            del hyperparams["N_nu"]
 
         if "frame_stack" in hyperparams.keys():
             self.frame_stack = hyperparams["frame_stack"]
@@ -463,23 +463,23 @@ class ExperimentManager(object):
             monitor_kwargs = dict(info_keywords=("is_success",))
 
         # if adversarial environment, adapt action space by wrapping into adversarial wrapper
-        if self.algo == "rarl" or self.adv_env:
-            wrapper_kwargs = {}
-            #if not self.env_wrapper:
-            if self.verbose > 0:
-                print("Using adversarial environment wrapper...")
-            if self.adv_impact.lower() == "control":
-                self.env_wrapper = AdversarialClassicControlWrapper
-                wrapper_kwargs.update(dict(adv_fraction=self.adv_fraction))
-                if self.device:
-                    wrapper_kwargs.update(dict(device=self.device))
-            elif self.adv_impact.lower() == "force": 
-                self.env_wrapper = AdversarialMujocoWrapper
-                wrapper_kwargs.update(dict(adv_fraction=self.adv_fraction, index_list=self.adv_index_list, force_dim=self.adv_force_dim))
-                if self.device:
-                    wrapper_kwargs.update(dict(device=self.device))
-        else: 
-            wrapper_kwargs = {}
+        wrapper_kwargs = {}
+
+        if not eval_env:
+            if self.algo == "rarl" or self.adv_env:
+                #if not self.env_wrapper:
+                if self.verbose > 0:
+                    print("Using adversarial environment wrapper...")
+                if self.adv_impact.lower() == "control":
+                    self.env_wrapper = AdversarialClassicControlWrapper
+                    wrapper_kwargs.update(dict(adv_fraction=self.adv_fraction))
+                    if self.device:
+                        wrapper_kwargs.update(dict(device=self.device))
+                elif self.adv_impact.lower() == "force": 
+                    self.env_wrapper = AdversarialMujocoWrapper
+                    wrapper_kwargs.update(dict(adv_fraction=self.adv_fraction, index_list=self.adv_index_list, force_dim=self.adv_force_dim))
+                    if self.device:
+                        wrapper_kwargs.update(dict(device=self.device))
 
         # on most env, SubprocVecEnv does not help and is quite memory hungry, therefore we use DummyVecEnv by default
         env = make_vec_env(
@@ -637,7 +637,7 @@ class ExperimentManager(object):
 
         try:
             if self.algo == "rarl": 
-                model.learn(self.n_timesteps, total_timesteps_protagonist=self.total_steps_protagonist, total_timesteps_adversary=self.total_steps_adversary, adv_delay=self.adv_delay, **kwargs)
+                model.learn(self.n_timesteps, N_mu=self.N_mu, N_nu=self.N_nu, adv_delay=self.adv_delay, **kwargs)
             else:
                 model.learn(self.n_timesteps, **kwargs)
         except KeyboardInterrupt:
@@ -849,11 +849,24 @@ class ExperimentManager(object):
 
         # Sample candidate hyperparameters
         sampled_hyperparams = HYPERPARAMS_SAMPLER[self.algo](trial)
+
+        if "adv_fraction" in sampled_hyperparams.keys(): 
+            self.adv_fraction = sampled_hyperparams["adv_fraction"]
+            del sampled_hyperparams["adv_fraction"]
+        if "N_mu" in sampled_hyperparams.keys():
+            self.N_mu = sampled_hyperparams["N_mu"]
+            del sampled_hyperparams["N_mu"]
+        if "N_nu" in sampled_hyperparams.keys():
+            self.N_nu = sampled_hyperparams["N_nu"]
+            del sampled_hyperparams["N_nu"]
+
         kwargs.update(sampled_hyperparams)
 
+        # Create environment
         n_envs = self.n_envs
         env = self.create_envs(n_envs, no_log=True)
 
+        # Define model
         model = ALGOS[self.algo](
             env=env,
             tensorboard_log=None,
@@ -863,13 +876,25 @@ class ExperimentManager(object):
             **kwargs,
         )
 
+        # Create evaluation environment
         eval_env = self.create_envs(n_envs=self.n_eval_envs, eval_env=True)
-
-        optuna_eval_freq = int(self.n_timesteps / self.n_evaluations_opt)
         
+        if self.algo == "rarl": 
+            self.n_timesteps = int(500000 / (self.N_mu * model.protagonist.n_steps * model.protagonist.env.num_envs))
+            optuna_eval_freq = int((self.n_timesteps * self.N_mu * model.protagonist.n_steps * model.protagonist.env.num_envs) / self.n_evaluations_opt)
+        else:
+            optuna_eval_freq = int(self.n_timesteps / self.n_evaluations_opt)
+        
+        print(f"n_timesteps: {self.n_timesteps}")
+        print(f"N_mu: {self.N_mu}")
+        print(f"N_nu: {self.N_nu}")
+        print(f"protagonist n_steps: {model.protagonist.n_steps}")
+        print(f"adversary n_steps: {model.adversary.n_steps}")
+        print(f"eval_frequency: {optuna_eval_freq}")
+
         # account for parallel envs
         optuna_eval_freq = max(optuna_eval_freq // self.n_envs, 1)
-        
+
         # use non-deterministic eval for Atari
         path = None
         if self.optimize_hyperparameters_path is not None:
@@ -888,8 +913,16 @@ class ExperimentManager(object):
 
         learn_kwargs = {}
 
+        if self.algo == "rarl": 
+            learn_kwargs["callback_protagonist"] = callbacks
+            callbacks_adversary = []
+            learn_kwargs["callback_adversary"] = [callbacks_adversary.append(callback) for callback in callbacks if not isinstance(callback, EvalCallback)]
+
         try:
-            model.learn(self.n_timesteps, callback=callbacks, **learn_kwargs)
+            if self.algo == "rarl":
+                model.learn(self.n_timesteps, N_mu=self.N_mu, N_nu=self.N_nu, adv_delay=self.adv_delay, **learn_kwargs)
+            else:
+                model.learn(self.n_timesteps, callback=callbacks, **learn_kwargs)
             # free memory
             model.env.close()
             eval_env.close()

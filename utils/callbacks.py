@@ -1,13 +1,15 @@
 import os 
 import optuna
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Optional
 
 from stable_baselines3.common.vec_env import VecEnv
 from stable_baselines3.common.callbacks import BaseCallback, EvalCallback
 
+
 # ================================================
 #   Define and customize callback functions
 # ================================================
+
 
 class TrialEvalCallback(EvalCallback):
     """

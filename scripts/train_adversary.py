@@ -14,7 +14,8 @@ from utils.exp_manager import ExperimentManager
 from utils.utils import StoreDict
 
 # ===========================================================================================
-#   Training an RL agent on an environment specified. 
+#   Training an RL agent on an environment specified. Extends RL Baselines3 Zoo training 
+#   script for training the Robust Aversarial RL agent (RARL).
 #   To promote standardization, the script is as close to RL Baselines3 Zoo as possible.
 #   (https://github.com/DLR-RM/rl-baselines3-zoo/blob/master/train.py)   
 # ===========================================================================================
@@ -26,67 +27,65 @@ if __name__ == "__main__":
     # General configs
     parser.add_argument("--verbose", type=int, default=0, choices=[0, 1], help="Verbose mode (0: no output, 1: INFO)")
     parser.add_argument("--seed", type=int, default=-1, help="Random generator seed")
-    parser.add_argument("--num_threads", type=int, default=-1, help="Number of threads for PyTorch")
-    parser.add_argument("--num_exps", type=int, default=1, help="Number of experiments")
+    parser.add_argument("--num-exps", type=int, default=1, help="Number of experiments")
+    parser.add_argument("--num-threads", type=int, default=-1, help="Number of threads for PyTorch")
 
     # Configs about environment
     parser.add_argument('--env', type=str, default="BipedalWalker-v3", help='Name of gym environment')
-    parser.add_argument("--n_envs", type=int, default=1, help="Number of environments for stack")
-    parser.add_argument("--vec_env_type", type=str, default="dummy", choices=["dummy", "subproc"], help="VecEnv type")
-    parser.add_argument("--env_kwargs", type=str, nargs="+", action=StoreDict, help="Optional keyword argument to pass to the env constructor")
-    parser.add_argument("--adv_env", action="store_true", default=False, help="Adversarial gym environment")
+    parser.add_argument("--n-envs", type=int, default=1, help="Number of environments for stack")
+    parser.add_argument("--vec-env-type", type=str, default="dummy", choices=["dummy", "subproc"], help="VecEnv type")
+    parser.add_argument("--env-kwargs", type=str, nargs="+", action=StoreDict, help="Optional keyword argument to pass to the env constructor")
+    parser.add_argument("--adv-env", action="store_true", default=False, help="Adversarial gym environment")
 
     # Configs about model
     parser.add_argument("--algo", type=str, default="ppo", choices=list(ALGOS.keys()), help="RL Algorithm")
-    parser.add_argument("--saved_models_path", type=str, default=os.path.join("saved_models"), help="Path to a saved models")
-    parser.add_argument("--pretrained_model", type=str, default="", help="Path to a pretrained agent to continue training")
-    parser.add_argument("--save_replay_buffer", default=False, action="store_true", help="Save the replay buffer (when applicable)")
+    parser.add_argument("--saved-models-path", type=str, default=os.path.join("saved_models"), help="Path to a saved models")
+    parser.add_argument("--pretrained-model", type=str, default="", help="Path to a pretrained agent to continue training")
+    parser.add_argument("--save-replay-buffer", default=False, action="store_true", help="Save the replay buffer (when applicable)")
 
     # Configs about hyperparameter
     parser.add_argument("-params", "--hyperparameter", type=str, nargs="+", action=StoreDict, help="Overwrite hyperparameter (e.g. learning_rate:0.01 train_freq:10)")
-    parser.add_argument("-optimize", "--optimize_hyperparameters", action="store_true", default=False, help="Run hyperparameters search")
-    parser.add_argument("--hyperparameter_path", type=str, default=os.path.join("hyperparameter"), help="Path to a saved models")
+    parser.add_argument("-optimize", "--optimize-hyperparameters", action="store_true", default=False, help="Run hyperparameters search")
+    parser.add_argument("--hyperparameter-path", type=str, default=os.path.join("hyperparameter"), help="Path to a saved hyperparameters")
     parser.add_argument("--storage", type=str, default=None, help="Database storage path if distributed optimization should be used")
-    parser.add_argument("--study_name", type=str, default=None, help="Study name for distributed optimization")
+    parser.add_argument("--study-name", type=str, default=None, help="Study name for distributed optimization")
     parser.add_argument("--sampler", type=str, default="tpe", choices=["random", "tpe", "skopt"], help="Sampler to use when optimizing hyperparameters") 
     parser.add_argument("--pruner", type=str, default="median", choices=["halving", "median", "none"], help="Pruner to use when optimizing hyperparameters")
-    parser.add_argument("--optimization_log_path", type=str, default=os.path.join("hyperparam_optimization"), help="Path to save the evaluation log and optimal policy for "
+    parser.add_argument("--optimization-log-path", type=str, default=os.path.join("hyperparam_optimization"), help="Path to save the evaluation log and optimal policy for "
                                                                                                                         "each hyperparameter tried during optimization.")
-    parser.add_argument("--n_opt_trials", type=int, default=10, help="Number of trials for optimizing hyperparameters.")
-    parser.add_argument("--no_optim_plots", action="store_true", default=False, help="Disable hyperparameter optimization plots")
-    parser.add_argument("--n_jobs", type=int, default=1, help="Number of parallel jobs when optimizing hyperparameters")
-    parser.add_argument("--n_startup_trials", type=int, default=10, help="Number of trials before using optuna sampler")
+    parser.add_argument("--n-opt-trials", type=int, default=10, help="Number of trials for optimizing hyperparameters.")
+    parser.add_argument("--no-optim_plots", action="store_true", default=False, help="Disable hyperparameter optimization plots")
+    parser.add_argument("--n-jobs", type=int, default=1, help="Number of parallel jobs when optimizing hyperparameters")
+    parser.add_argument("--n-startup-trials", type=int, default=10, help="Number of trials before using optuna sampler")
+    parser.add_argument("--n-evaluations-opt", type=int, default=20, help="Training policies are evaluated every n-timesteps during hyperparameter optimization")
 
     # Configs about training
-    parser.add_argument("-n", "--n_timesteps", type=int, default=-1, help="Number of timesteps")
-    parser.add_argument("--save_freq", type=int, default=-1, help="Save model every k steps (if negative, no checkpoint)")
-    parser.add_argument("--log_interval", type=int, default=-1, help="Override log interval (default: -1, no change)")
+    parser.add_argument("-n", "--n-timesteps", type=int, default=-1, help="Number of timesteps")
+    parser.add_argument("--save-freq", type=int, default=-1, help="Save model every k steps (if negative, no checkpoint)")
+    parser.add_argument("--log-interval", type=int, default=-1, help="Override log interval (default: -1, no change)")
+    parser.add_argument("--device", type=str, default="cpu", help="Specify device")
 
     # Configs about evaluation
-    parser.add_argument("--n_evaluations_opt", type=int, default=20, help="Training policies are evaluated every n-timesteps during hyperparameter optimization")
-    parser.add_argument("--n_eval_episodes", type=int, default=5, help="Number of episodes to use for evaluation")
-    parser.add_argument("--n_eval_envs", type=int, default=1, help="Number of environments for evaluation")
-    parser.add_argument("--eval_freq", type=int, default=10000, help="Evaluate the agent every e steps (if negative, no evaluation).")
+    parser.add_argument("--eval-freq", type=int, default=10000, help="Evaluate the agent every e steps (if negative, no evaluation).")
+    parser.add_argument("--n-eval-envs", type=int, default=1, help="Number of environments for evaluation")
+    parser.add_argument("--n-eval-episodes", type=int, default=5, help="Number of episodes to use for evaluation")
 
     # Configs about logging results 
-    parser.add_argument("-tb", "--tensorboard_log", type=str, default=os.path.join("tb_logging"), help="Tensorboard log dir")
-    parser.add_argument("-f", "--log_folder", type=str, default=os.path.join("logging"), help="Log folder")
+    parser.add_argument("-tb", "--tensorboard-log", type=str, default=os.path.join("tb_logging"), help="Tensorboard log dir")
+    parser.add_argument("-f", "--log-folder", type=str, default=os.path.join("logging"), help="Log folder")
 
     # Configs for RARL
-    parser.add_argument('--protagonist_policy', type=str, default="MlpPolicy", help='Policy of protagonist')
-    parser.add_argument('--adversary_policy', type=str, default="MlpPolicy", help='Policy of adversary')
-
-    parser.add_argument('--total_steps_protagonist', type=int, default=-1, help='Number of steps to run for each environment per protagonist update')
-    parser.add_argument('--total_steps_adversary', type=int, default=-1, help='Number of steps to run for each environment per adversary update')
+    parser.add_argument('--protagonist-policy', type=str, default="MlpPolicy", help='Policy of protagonist')
+    parser.add_argument('--adversary-policy', type=str, default="MlpPolicy", help='Policy of adversary')
+    parser.add_argument('--N-mu', type=int, default=-1, help='Number of steps to run for each environment per protagonist update')
+    parser.add_argument('--N-nu', type=int, default=-1, help='Number of steps to run for each environment per adversary update')
 
     # Configs for adversarial environment
-    parser.add_argument('--adv_impact', type=str, default="control", choices=["control", "force"], help='Define how adversary impacts agent')
-    parser.add_argument('--adv_delay', type=int, default=-1, help='Delay of adversary')
-    parser.add_argument('--adv_low', type=float, default=-1.0, help='Minimal adversarial impact')
-    parser.add_argument('--adv_high', type=float, default=1.0, help='Maximal adversarial impact')
-    parser.add_argument('--adv_fraction', type=float, default=1.0, help='Force-scaling for adversary')
-    parser.add_argument('--adv_index_list', nargs='+', type=str, default=["torso"], help='Contact point for adversarial forces (for Mujoco environments)')
-    parser.add_argument('--adv_force_dim', type=int, default=2, help='Dimension of adversarial force')
+    parser.add_argument('--adv-impact', type=str, default="control", choices=["control", "force"], help='Define how adversary impacts agent')
+    parser.add_argument('--adv-delay', type=int, default=-1, help='Delay of adversary')
+    parser.add_argument('--adv-fraction', type=float, default=1.0, help='Force-scaling for adversary')
+    parser.add_argument('--adv-index-list', nargs='+', type=str, default=["torso"], help='Contact point for adversarial forces (for Mujoco environments)')
+    parser.add_argument('--adv-force-dim', type=int, default=2, help='Dimension of adversarial force')
 
 
     args = parser.parse_args()
@@ -165,12 +164,10 @@ if __name__ == "__main__":
             adv_impact=args.adv_impact,
             adv_fraction=args.adv_fraction,
             adv_delay=args.adv_delay,
-            adv_low=args.adv_low, 
-            adv_high=args.adv_high,
             adv_index_list=args.adv_index_list,
             adv_force_dim=args.adv_force_dim,
-            total_steps_protagonist=args.total_steps_protagonist,
-            total_steps_adversary=args.total_steps_adversary
+            N_mu=args.N_mu,
+            N_nu=args.N_nu
         )
 
         # Prepare experiment and launch hyperparameter optimization if needed
