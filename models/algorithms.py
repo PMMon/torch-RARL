@@ -25,3 +25,17 @@ ALGOS = {
     # Project's Contrib,
     "rarl": RARL
 }
+
+# algorithms that can be used as protagonist or adversary
+ALGOS_RARL = {
+    "a2c": A2C,
+    "ddpg": DDPG,
+    "dqn": DQN,
+    "ppo": PPO,
+    "sac": SAC,
+    "td3": TD3,
+    # SB3 Contrib,
+    "qrdqn": QRDQN,
+    "tqc": TQC,
+    "trpo": TRPO,
+}
